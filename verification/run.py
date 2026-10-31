@@ -20,6 +20,7 @@ p.add_argument('--arch',choices=['x86_64','aarch64'],required=True)
 p.add_argument('--desktop',action='store_true')
 p.add_argument('--external',action='store_true')
 p.add_argument('--smoke-only',action='store_true')
+p.add_argument('--trace-http',action='store_true',help='Diagnostic network replays after unchanged mandatory tests')
 a=p.parse_args();work=a.work.resolve();root=Path(__file__).resolve().parent
 dist=(a.dist or work/'dist').resolve()
 input_file=dist/'inputs.json' if a.dist else work/'inputs.json'
@@ -214,6 +215,18 @@ try:
         # GUI/MPRIS tests use the existing desktop or the private CI Xvfb session.
         from gui import exercise
         exercise(a,app,out,fp,wrapped,cmd,result,base,record)
+        if a.trace_http:
+            from network_trace import capture
+            record['http_network_diagnostics']=[]
+            for suffix in ('h264-aac.mp4','hls/index.m3u8'):
+                name='http-decode-'+suffix.replace('/','-')
+                original=next(x for x in checks if x['name']==name)
+                evidence=capture(app/'files/verify/strace',
+                    fp(wrapped(['/app/verify/probe','decode',base+'/'+suffix])),
+                    out,name,original)
+                record['http_network_diagnostics'].append(evidence)
+            # No result() calls: traced replays cannot replace mandatory outcomes.
+
     result('hardware-acceleration','unavailable' if not list(Path('/dev/dri').glob('renderD*')) else 'untested',
            'no render device' if not list(Path('/dev/dri').glob('renderD*')) else 'requires real GPU playback review',False)
     result('physical-audio-quality','untested','PCM callbacks/device monitor do not establish audible quality',False)

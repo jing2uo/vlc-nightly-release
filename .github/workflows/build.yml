@@ -8,6 +8,10 @@ on:
         description: 'Optional full VLC master commit SHA'
         type: string
         required: false
+      trace_http:
+        description: 'Temporary network syscall diagnostics; mandatory results unchanged'
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -121,7 +125,12 @@ jobs:
           path: work/deps
           key: ${{ steps.cache.outputs.key }}
       - name: Verify native payload in the pinned KDE Platform
-        run: scripts/verify.sh --backend=podman --headless
+        env:
+          TRACE_HTTP: ${{ inputs.trace_http }}
+        run: |
+          args=()
+          if [[ "$TRACE_HTTP" == true ]]; then args+=(--trace-http); fi
+          scripts/verify.sh --backend=podman --headless "${args[@]}"
       - uses: actions/upload-artifact@v7
         if: always() && steps.compile.outcome == 'success'
         with:
