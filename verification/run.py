@@ -2,16 +2,13 @@
 """Small stdlib controller: SDK inspection + actual Platform execution, never host VLC."""
 import argparse
 import hashlib
-import http.server
 import json
 import os
 from pathlib import Path
 import re
 import shlex
 import shutil
-import socketserver
 import subprocess
-import threading
 import time
 import urllib.request
 from archive import audit, require
@@ -202,23 +199,21 @@ try:
             '/app/relocated/extra/share/vlc/hrtfs/dodeca_and_7channel_3DSL_HRTF.sofa'],'/app/relocated/extra')))
     finally:shutil.move(str(moved),app/'files/extra')
     # Local HTTP/HLS are deterministic; external reachability is reported separately.
-    class Quiet(http.server.SimpleHTTPRequestHandler):
-        def __init__(self,*args,**kwargs):super().__init__(*args,directory=str(target),**kwargs)
-        def log_message(self,*args):pass
-        def copyfile(self,source,outputfile):
-            try:super().copyfile(source,outputfile)
-            except (BrokenPipeError,ConnectionResetError):pass # VLC intentionally stops bounded probes
-    server=socketserver.TCPServer(('127.0.0.1',0),Quiet)
-    threading.Thread(target=server.serve_forever,daemon=True).start()
-    base=f'http://127.0.0.1:{server.server_address[1]}'
-    record['local_http_base']=base
-    try:
+    from http_fixture import fixture_server
+    with fixture_server(target,out/'http-fixture.jsonl') as base:
+        record['local_http_base']=base
+        # Independent request from the same Platform sandbox used for VLC.
+        # No proxy for this diagnostic loopback client; VLC's settings stay unchanged.
+        cmd('http-fixture-reachability',fp(['/bin/bash','-ec',
+            'readlink /proc/self/ns/net; for url in "$@"; do '
+            'curl --noproxy "*" --fail --silent --show-error --connect-timeout 2 --max-time 5 '
+            '--dump-header - --output /dev/null "$url"; done','test',
+            base+'/h264-aac.mp4',base+'/hls/index.m3u8',base+'/hls/index0.ts']),timeout=25)
         for suffix in ('h264-aac.mp4','hls/index.m3u8'):
             cmd('http-decode-'+suffix.replace('/','-'),fp(wrapped(['/app/verify/probe','decode',base+'/'+suffix])),timeout=25)
         # GUI/MPRIS tests use the existing desktop or the private CI Xvfb session.
         from gui import exercise
         exercise(a,app,out,fp,wrapped,cmd,result,base,record)
-    finally:server.shutdown();server.server_close()
     result('hardware-acceleration','unavailable' if not list(Path('/dev/dri').glob('renderD*')) else 'untested',
            'no render device' if not list(Path('/dev/dri').glob('renderD*')) else 'requires real GPU playback review',False)
     result('physical-audio-quality','untested','PCM callbacks/device monitor do not establish audible quality',False)

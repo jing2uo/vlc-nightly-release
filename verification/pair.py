@@ -9,7 +9,7 @@ from archive import audit, require
 REQUIRED = {
     'gnutls-config-overrides', 'sofa-explicit-runtime-data', 'runtime-file-trace', 'runtime-file-paths',
     'relocated-vlc-direct', 'relocated-cvlc-playback', 'relocated-sofa-runtime-data',
-    'runtime-path-source-evidence', 'qt-private-abi',
+    'runtime-path-source-evidence', 'qt-private-abi', 'http-fixture-reachability',
     'platform-namespace-smoke', 'archive-integrity-provenance-safety',
     'archive-negative-tests', 'prepare-sdk', 'fixture-codecs', 'elf-static',
     'temporary-runtime-data-paths', 'platform-symbol-resolution', 'platform-executable-dependencies', 'startup-version',
