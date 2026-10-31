@@ -1,0 +1,189 @@
+name: VLC nightly
+on:
+  schedule:
+    - cron: '43 4 * * *'
+  workflow_dispatch:
+    inputs:
+      upstream_sha:
+        description: 'Optional full VLC master commit SHA'
+        type: string
+        required: false
+permissions:
+  contents: read
+concurrency:
+  group: vlc-nightly
+  cancel-in-progress: false
+jobs:
+  resolve:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    outputs:
+      build: ${{ steps.resolve.outputs.build }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Resolve upstream and immutable SDK inputs once
+        id: resolve
+        env:
+          PIN: ${{ inputs.upstream_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scripts/run-container.sh resolve "$PIN"
+          version=$(python3 -c 'import json;print((lambda d: d.get("artifact_version",d["version"]))(json.load(open("work/inputs.json"))))')
+          sha=$(python3 -c 'import json;print(json.load(open("work/inputs.json"))["upstream_sha"])')
+          build=$(python3 scripts/release.py "$version" "$sha" work/inputs.json)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: inputs
+          path: work/inputs.json
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: resolve-diagnostics
+          path: work/logs/
+          retention-days: 30
+  build:
+    needs: resolve
+    if: needs.resolve.outputs.build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {arch: x86_64, runner: ubuntu-26.04}
+          - {arch: aarch64, runner: ubuntu-26.04-arm}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 350
+    env:
+      ARCH: ${{ matrix.arch }}
+      JOBS: '2'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: inputs
+          path: work
+      - name: Measure disk and prepare a 20 GiB planning budget
+        run: |
+          mkdir -p work/logs
+          df -h . | tee work/logs/runner-disk-before.log
+          free -m | tee work/logs/runner-memory.log
+          # Only unused hosted-runner SDKs. Keep Podman, Flatpak orchestration,
+          # system libraries, /usr/bin and the Actions runtime intact.
+          if (( $(df -Pk . | awk 'NR==2 {print $4}') < 20971520 )); then
+            for path in /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/lib/jvm; do
+              if [[ -d $path ]]; then
+                sudo du -sk "$path" >> work/logs/reclaimed.log
+                sudo rm -rf -- "$path"
+              fi
+            done
+          fi
+          df -h . | tee work/logs/runner-disk-after.log
+          if (( $(df -Pk . | awk 'NR==2 {print $4}') < 20971520 )); then
+            echo 'Less than planning budget after cleanup; inspect resource logs.' >&2
+            exit 1
+          fi
+      - name: Cache compatibility key
+        id: cache
+        run: |
+          source <(python3 scripts/metadata.py env work/inputs.json "$ARCH")
+          echo "key=contrib-$ARCH-$CACHE_KEY" >> "$GITHUB_OUTPUT"
+          echo "complete=work/deps/$CACHE_KEY/complete" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v6
+        id: restore
+        with:
+          path: work/deps
+          key: ${{ steps.cache.outputs.key }}
+          # No partial-key restore: SDK/toolchain/recipe changes invalidate it.
+      - name: Build in KDE SDK inside rootless Podman
+        id: compile
+        run: scripts/run-container.sh build "$ARCH"
+      - name: Check for completed contrib outputs
+        id: completed
+        if: always()
+        env:
+          MARKER: ${{ steps.cache.outputs.complete }}
+        run: |
+          if [[ -n "$MARKER" && -f "$MARKER" ]]; then
+            echo 'save=true' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/cache/save@v6
+        if: always() && steps.completed.outputs.save == 'true' && steps.restore.outputs.cache-hit != 'true'
+        continue-on-error: true
+        with:
+          path: work/deps
+          key: ${{ steps.cache.outputs.key }}
+      - name: Verify native payload in the pinned KDE Platform
+        run: scripts/verify.sh --backend=podman --headless
+      - uses: actions/upload-artifact@v7
+        if: always() && steps.compile.outcome == 'success'
+        with:
+          name: vlc-${{ matrix.arch }}
+          path: work/dist/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
+      - name: Capture final resources
+        if: always()
+        run: |
+          df -h . > work/logs/runner-disk-final.log
+          free -m > work/logs/runner-memory-final.log
+          podman ps -a > work/logs/containers.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: diagnostics-${{ matrix.arch }}
+          path: |
+            work/logs/
+            work/verification/results/
+          if-no-files-found: warn
+          retention-days: 30
+  verify:
+    needs: [resolve, build]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: inputs
+          path: artifacts
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: vlc-*
+          path: artifacts
+          merge-multiple: true
+      - run: scripts/verify-artifacts.sh artifacts
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-candidate
+          path: artifacts/
+          compression-level: 0
+          retention-days: 30
+  release:
+    needs: verify
+    # Phase 2 lock: ARM/hosted CI, regression and manual evidence remain incomplete.
+    if: ${{ false }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-candidate
+          path: artifacts
+      - run: scripts/publish.sh artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
