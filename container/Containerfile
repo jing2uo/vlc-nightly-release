@@ -1,0 +1,7 @@
+FROM registry.fedoraproject.org/fedora:45
+# Only orchestration tools here. Compilers and headers come from org.kde.Sdk.
+RUN dnf -y install flatpak ostree git python3 tar zstd time procps-ng findutils util-linux \
+    && dnf clean all
+ENV XDG_DATA_HOME=/work/flatpak-data XDG_CACHE_HOME=/work/cache
+WORKDIR /work
+ENTRYPOINT ["/bin/bash", "/recipe/scripts/environment.sh"]

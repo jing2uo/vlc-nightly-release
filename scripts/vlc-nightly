@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+prefix=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+export LD_LIBRARY_PATH="$prefix/lib:$prefix/lib/vlc${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export VLC_PLUGIN_PATH="$prefix/lib/vlc/plugins"
+export VLC_DATA_PATH="$prefix/share/vlc"
+export VLC_LIB_PATH="$prefix/lib/vlc"
+export VLC_LIBEXEC_PATH="$prefix/lib/vlc"
+# GnuTLS contrib is static in several plugins. Use the target runtime's
+# optional system policy path, preserving an explicit user override.
+export GNUTLS_SYSTEM_PRIORITY_FILE="${GNUTLS_SYSTEM_PRIORITY_FILE-/etc/gnutls/config}"
+# Qt and its QML modules remain in the matching org.kde.Platform runtime.
+exec -a "$prefix/bin/vlc" "$prefix/bin/vlc.bin" "$@"

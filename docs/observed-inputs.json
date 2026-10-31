@@ -1,0 +1,24 @@
+{
+  "upstream_sha": "c7834066e27cf07a2a15f1e8aab17c12df97e5d4",
+  "version": "4.0.0-dev-39603-gc7834066e2",
+  "sdk": "org.kde.Sdk//6.11",
+  "runtime": "org.kde.Platform//6.11",
+  "source_url": "https://code.videolan.org/videolan/vlc.git",
+  "source_epoch": 1793416063,
+  "deps_epoch": 1793256668,
+  "recipe_sha256": "e14921b0614a5a377bc6db0eab05631f347658eb28834ea3d87dc8abcc6d4d6a",
+  "recipe_commit": "local",
+  "contrib_recipe_sha256": "42b7ee93b431a319132eb1b3f5213f62fb0552d26a45ed691e2a098f0b23c95b",
+  "contrib_tree": "456a30d988bde243a07830ba54683929bdfcea25",
+  "tools_tree": "ac8498a890c13252b13eac627bea1a7b4257dacb",
+  "architectures": {
+    "x86_64": {
+      "sdk_commit": "f77a65229fcb9dc1468944cd6a2b5aa327d1877725d681467805dae6ed68aebe",
+      "platform_commit": "fb23e178d082b117df7924f9a84710992ec233ebc007385feb85d349c4c81415"
+    },
+    "aarch64": {
+      "sdk_commit": "e58039f6c1806bee3bf5d66818194ab9f19c481edfc7a6aedbc3cbc51b0851cb",
+      "platform_commit": "e25247bfe32e5b02489db8239f16ede5a4c0b4844446ee2270fc315535a7ffc9"
+    }
+  }
+}
