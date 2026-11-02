@@ -8,6 +8,19 @@ import subprocess
 from qt_identity import release_identity, validate_inputs
 
 
+def build_recipe_equal(previous,current):
+    # Publication/docs-only commits must not invalidate an already immutable
+    # build. Compare actual tracked build inputs, never ignore a recipe change.
+    old=previous.get('recipe_commit','');new=current.get('recipe_commit','')
+    import re
+    if not all(re.fullmatch('[0-9a-f]{40}',v) for v in [old,new]):return False
+    if subprocess.run(['git','merge-base','--is-ancestor',old,new],capture_output=True).returncode:return False
+    paths=['scripts','container/Containerfile','patches','verification/runtime_paths.py',
+           'verification/runtime-path-policy.json','verification/qt_abi.py',
+           ':(exclude)scripts/release.py',':(exclude)scripts/publish.sh',':(exclude)scripts/production.py',':(exclude)scripts/check-runtime.sh']
+    return subprocess.run(['git','diff','--quiet',old,new,'--',*paths],capture_output=True).returncode==0
+
+
 def completed(releases,version,sha,inputs,load_inputs):
     for release in releases:
         if release['tag_name']!=version:continue
@@ -22,8 +35,9 @@ def completed(releases,version,sha,inputs,load_inputs):
             if (release_identity(inputs['qt_abi'])!=inputs['qt_abi_identity']
                     or release_identity(previous.get('qt_abi',{}))!=previous.get('qt_abi_identity')):
                 raise ValueError('Invalid release Qt ABI identity')
-        for key in ('upstream_sha','artifact_version','qt_abi_identity','recipe_sha256'):
+        for key in ('upstream_sha','artifact_version','qt_abi_identity','source_patches','recipe_sha256'):
             if previous.get(key)!=inputs.get(key):
+                if key=='recipe_sha256' and build_recipe_equal(previous,inputs):continue
                 raise ValueError('Existing release input conflict: '+key+'; bump packaging revision, never replace assets')
         return True
     return False

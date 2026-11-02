@@ -117,7 +117,9 @@ class WaiverTests(unittest.TestCase):
     def test_no_publication_unlock(self):
         root=Path(__file__).resolve().parent.parent
         workflow=(root/'.github/workflows/build.yml').read_text()
-        self.assertIn('if: ${{ false }}',workflow)
+        self.assertIn("github.ref == 'refs/heads/main'",workflow)
+        self.assertIn('environment: production',workflow)
+        self.assertIn('VLC_PUBLICATION_APPROVED: production-pair-reviewed',workflow)
         self.assertIn('VLC_PUBLICATION_APPROVED', (root/'scripts/publish.sh').read_text())
         self.assertFalse(self.report['release_ready'])
 

@@ -48,9 +48,9 @@ The test is never reported as PASS when it crashed.
 a failed re-evaluation leaves a FAIL summary rather than a stale WAIVED summary.
 Release notes, if publication is separately authorized in the future, explicitly
 identify the upstream ARM64 X11 rapid-quit crash and waiver expiry. The pair
-summary and raw logs are included in the explicit release asset list. Existing
-workflow `if: false`, `VLC_PUBLICATION_APPROVED` and `release_ready: false` remain
-in force. The waiver grants **no publication authorization**.
+summary and raw logs are included in the explicit release asset list. Phase 3 replaces the old unconditional disable with trusted-main, native/pair,
+signed-attestation and production-environment gates. `VLC_PUBLICATION_APPROVED`
+and raw `release_ready: false` remain separate from waiver eligibility. The waiver grants **no publication authorization**.
 
 ## Validation and removal
 

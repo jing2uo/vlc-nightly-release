@@ -1,13 +1,21 @@
 name: VLC nightly
 on:
   schedule:
-    - cron: '43 4 * * *'
+    - cron: '43 4 * * 1'
   workflow_dispatch:
     inputs:
       upstream_sha:
         description: 'Optional full VLC master commit SHA'
         type: string
         required: false
+      promote_run_id:
+        description: 'Promote a successful native build run without rebuilding (initial run: 41523505909)'
+        type: string
+        required: false
+      publish:
+        description: 'Publish an eligible production release'
+        type: boolean
+        default: true
       trace_http:
         description: 'Temporary network syscall diagnostics; mandatory results unchanged'
         type: boolean
@@ -19,6 +27,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   resolve:
+    if: inputs.promote_run_id == ''
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     outputs:
@@ -28,12 +37,14 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          fetch-depth: 0
       - name: Resolve upstream and immutable SDK inputs once
         id: resolve
         env:
           PIN: ${{ inputs.upstream_sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          if [[ "${GITHUB_EVENT_NAME:-}" == schedule ]]; then PIN=$(python3 scripts/production.py schedule); fi
           scripts/run-container.sh resolve "$PIN"
           version=$(python3 -c 'import json;print((lambda d: d.get("artifact_version",d["version"]))(json.load(open("work/inputs.json"))))')
           sha=$(python3 -c 'import json;print(json.load(open("work/inputs.json"))["upstream_sha"])')
@@ -84,7 +95,7 @@ jobs:
           if (( $(df -Pk . | awk 'NR==2 {print $4}') < 20971520 )); then
             for path in /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/lib/jvm; do
               if [[ -d $path ]]; then
-                sudo du -sk "$path" >> work/logs/reclaimed.log
+                sudo du -sk "$path" | tee -a work/logs/reclaimed.log > /dev/null
                 sudo rm -rf -- "$path"
               fi
             done
@@ -97,6 +108,8 @@ jobs:
       - name: Cache compatibility key
         id: cache
         run: |
+          # Trusted metadata.py emits shell-quoted assignments.
+          # shellcheck disable=SC1090
           source <(python3 scripts/metadata.py env work/inputs.json "$ARCH")
           echo "key=contrib-$ARCH-$CACHE_KEY" >> "$GITHUB_OUTPUT"
           echo "complete=work/deps/$CACHE_KEY/complete" >> "$GITHUB_OUTPUT"
@@ -178,13 +191,58 @@ jobs:
           path: artifacts/
           compression-level: 0
           retention-days: 30
+  promote:
+    if: github.event_name == 'workflow_dispatch' && inputs.promote_run_id != '' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Authenticate the source run and select its immutable artifact ID
+        id: source
+        env:
+          SOURCE_RUN: ${{ inputs.promote_run_id }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          artifact_id=$(python3 scripts/production.py promotion "$SOURCE_RUN")
+          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ steps.source.outputs.artifact_id }}
+          merge-multiple: true
+          run-id: ${{ inputs.promote_run_id }}
+          github-token: ${{ github.token }}
+          path: artifacts
+      - run: scripts/verify-artifacts.sh artifacts
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-candidate
+          path: artifacts/
+          compression-level: 0
+          retention-days: 30
   release:
-    needs: verify
-    # Phase 2 lock: ARM/hosted CI, regression and manual evidence remain incomplete.
-    if: ${{ false }}
+    needs: [verify, promote]
+    if: >-
+      always() && !cancelled() && github.ref == 'refs/heads/main' &&
+      needs.verify.result != 'failure' && needs.promote.result != 'failure' &&
+      (github.event_name == 'schedule' || inputs.publish) &&
+      (needs.verify.result == 'success' || needs.promote.result == 'success')
+    environment: production
     permissions:
       contents: write
+      actions: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.prepare.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -193,6 +251,50 @@ jobs:
         with:
           name: release-candidate
           path: artifacts
-      - run: scripts/publish.sh artifacts
+      - name: Check current SDK/Platform Qt content without rebuilding
+        run: scripts/check-runtime.sh artifacts
+      - name: Revalidate the exact candidate and create production metadata
+        id: prepare
+        env:
+          SOURCE_RUN_ID: ${{ inputs.promote_run_id || github.run_id }}
+        run: |
+          version=$(python3 scripts/production.py prepare artifacts)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Sign the payload and production metadata digests
+        id: attest
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            artifacts/*.tar.zst
+            artifacts/release.json
+            artifacts/current-runtime.json
+      - name: Save the publication attestation bundle
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: cp "$BUNDLE" artifacts/provenance.intoto.jsonl
+      - name: Publish immutable verified assets
+        run: scripts/publish.sh artifacts
         env:
           GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.promote_run_id || github.run_id }}
+          VLC_PUBLICATION_APPROVED: production-pair-reviewed
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: publication-diagnostics
+          path: artifacts/
+          compression-level: 0
+          retention-days: 30
+  flatpark-notify:
+    needs: release
+    # Set only after FlatPark accepts the app and associates this repository.
+    if: vars.FLATPARK_ACCEPTED == 'true'
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    continue-on-error: true
+    steps:
+      - uses: flatpark/publish-action@v1
+        with:
+          app-id: org.videolan.VLCBeta
+          tag: ${{ needs.release.outputs.version }}

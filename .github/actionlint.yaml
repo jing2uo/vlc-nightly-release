@@ -1,0 +1,6 @@
+# Tool catalog compatibility only: these are the existing GitHub-hosted labels
+# already used by successful native runs. This does not configure self-hosting.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04
+    - ubuntu-26.04-arm
