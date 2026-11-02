@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import sys
 from archive import audit, require
+from waiver import evaluate,utc
 
 REQUIRED = {
     'gnutls-config-overrides', 'sofa-explicit-runtime-data', 'runtime-file-trace', 'runtime-file-paths',
@@ -26,6 +27,8 @@ REQUIRED = {
 def verify(directory):
     directory=Path(directory).resolve()
     lock=json.loads((directory/'inputs.json').read_text())
+    # A failed re-evaluation must not leave an older WAIVED summary active.
+    (directory/'verification-pair.json').write_text(json.dumps(dict(automated_status='FAIL',known_issues=[],release_ready=False))+'\n')
     reports=[];sizes={};sums=[]
     for arch in ('x86_64','aarch64'):
         path=directory/f'vlc-{lock.get("artifact_version",lock["version"])}-{arch}.tar.zst'
@@ -52,18 +55,29 @@ def verify(directory):
             require(check['name'] not in checks,'duplicate verification check')
             checks[check['name']]=check
         require(REQUIRED<=checks.keys(),f'missing mandatory verification: {sorted(REQUIRED-checks.keys())}')
-        require(all(checks[n]['mandatory'] and checks[n]['status']=='pass' for n in REQUIRED),'required verification failed')
-        require(report['automated_status']=='pass' and all(c['status']=='pass' for c in checks.values() if c['mandatory']),
-                'native automated checks incomplete')
+        decision=evaluate(report,REQUIRED,directory)
+        require(decision['outcome'] in ('PASS','WAIVED'),'required verification failed: '+decision['reason'])
+        require(report['automated_status']==decision['outcome'].lower(),'native automated decision mismatch')
+        if decision['outcome']=='WAIVED':
+            require(report.get('automated_decision',{}).get('outcome')=='WAIVED','missing recorded waiver decision')
+            stored=report.get('automated_decision',{}).get('waiver',{})
+            current=decision['waiver']
+            require(all(stored.get(k)==v for k,v in current.items() if k!='evaluated_at'),
+                    'waiver evidence or policy mismatch')
+            require('evaluated_at' in stored and utc(current['effective_from'])<=utc(stored['evaluated_at'])
+                    <=utc(current['evaluated_at'])<utc(current['expires_at']), 'invalid waiver evaluation time')
         reports.append(report);sizes[path.name]=actual['size'];sums.append(f'{actual["sha256"]}  {path.name}\n')
     require(reports[0]['verification_sha256']==reports[1]['verification_sha256'],'different verification recipes')
     require(set(p.name for p in directory.glob('*.tar.zst'))==set(sizes),'unexpected or partial archive pair')
+    waived=[r['automated_decision']['waiver'] for r in reports if r['automated_status']=='waived']
+    summary=dict(automated_status='WAIVED' if waived else 'PASS',known_issues=waived,release_ready=False)
+    (directory/'verification-pair.json').write_text(json.dumps(summary,indent=2)+'\n')
     (directory/'sizes.json').write_text(json.dumps(sizes,indent=2)+'\n')
     (directory/'SHA256SUMS').write_text(''.join(sums))
     return reports
 
 if __name__=='__main__':
     try:
-        verify(sys.argv[1]);print('PASS: both native artifact reports and safe archive namespaces match the shared input lock')
+        verify(sys.argv[1]);summary=json.loads((Path(sys.argv[1])/'verification-pair.json').read_text());print(summary['automated_status']+': both native artifacts evaluated; publication authorization remains separate')
     except Exception as e:
         print('FAIL: '+str(e),file=sys.stderr);raise SystemExit(1)

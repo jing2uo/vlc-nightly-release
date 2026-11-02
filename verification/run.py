@@ -81,7 +81,16 @@ def wrapped(command,prefix='/app/extra'):
     return ['/bin/bash','-c',text]
 
 def write_report():
-    record['automated_status']='pass' if checks and all(x['status']=='pass' for x in checks if x['mandatory']) else 'fail'
+    from pair import REQUIRED
+    from waiver import evaluate
+    dist.mkdir(exist_ok=True)
+    evidence=record.get('rapid_quit_evidence')
+    if evidence:
+        shutil.copy2(out/'xcb-gui-openuri-quit-rapid.log',dist/evidence['log_name'])
+    decision=evaluate(record,{'platform-namespace-smoke'} if a.smoke_only else REQUIRED,dist)
+    record['automated_status']=decision['outcome'].lower()
+    record['automated_decision']=decision
+    print(decision['outcome']+': automated verification: '+decision['reason'],flush=True)
     record['release_ready']=False
     record['release_blockers']=['native aarch64 and actual GitHub Actions execution require evidence',
                                 'manual/environment-dependent coverage must be reviewed; workflow publication lock remains']
@@ -239,4 +248,4 @@ except Exception as e:
     result('verification-driver','fail',str(e))
 finally:
     write_report()
-raise SystemExit(0 if record['automated_status']=='pass' else 1)
+raise SystemExit(0 if record['automated_status'] in ('pass','waived') else 1)

@@ -26,8 +26,24 @@ SHA256SUMS and sizes.json describe both native architecture payloads.
 Recipe: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/tree/$GITHUB_SHA
 Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
 NOTES
+# This does not unlock publication: both existing authorization gates stay above.
+python3 - <<'PYNOTES'
+import json
+from pathlib import Path
+summary=json.loads(Path('verification-pair.json').read_text())
+if summary['automated_status']=='WAIVED':
+    with Path('notes.md').open('a') as notes:
+        notes.write('\nKNOWN UPSTREAM ISSUE — automated verification WAIVED:\n')
+        for issue in summary['known_issues']:
+            notes.write(f"- {issue['architecture']}: X11 rapid OpenUri/Quit assertion crash; "
+                        f"waiver {issue['id']}, expires {issue['expires_at']}; source {issue['source_commit']}.\n")
+PYNOTES
+diagnostic_assets=(verification-pair.json)
+for log in xcb-gui-openuri-quit-rapid-*.log; do
+  if [[ -f $log ]]; then diagnostic_assets+=("$log"); fi
+done
 gh release create "$version" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
   --draft --prerelease --title "VLC $version" --notes-file notes.md \
   ./*.tar.zst SHA256SUMS sizes.json inputs.json build-x86_64.json build-aarch64.json \
-  verification-x86_64.json verification-aarch64.json
+  verification-x86_64.json verification-aarch64.json "${diagnostic_assets[@]}"
 gh release edit "$version" --repo "$GITHUB_REPOSITORY" --draft=false

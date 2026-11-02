@@ -1,5 +1,6 @@
 """Bounded GUI regression checks with logs, MPRIS observations and screenshots."""
 import json
+import hashlib
 import os
 from pathlib import Path
 from mpris_control import pause_resume
@@ -155,6 +156,11 @@ def exercise(a,app,out,fp,wrapped,cmd,result,base,record):
             surface=capture if mode=='xcb' else bool(re.search(r'wl_surface.*commit\(',text))
             mandatory=not label.startswith('https-')
             ok=rc in (0,-signal.SIGTERM,143) and not fatal and playing and rendering and surface and (open_ok if label=='gui-openuri-quit-rapid' else True)
+            if name=='xcb-gui-openuri-quit-rapid':
+                record['rapid_quit_evidence']=dict(ran=True,test=name,exit_code=rc,
+                    playing=bool(playing),rendering=rendering,surface=surface,open_uri=open_ok,no_other_fatal=not fatal,
+                    log_name=name+'-'+record['architecture']+'.log',
+                    log_sha256=hashlib.sha256(file.read_bytes()).hexdigest())
             result(name,'pass' if ok else 'fail',
                    f'exit={rc}; MPRIS playing={bool(playing)}; video output={rendering}; surface={surface}; log={file.name}',mandatory)
             if label=='gui-local-h264':

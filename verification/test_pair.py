@@ -50,3 +50,45 @@ class PairGate(unittest.TestCase):
     def test_unexpected_payload(self):
         (self.directory/'extra.tar.zst').touch()
         with self.assertRaises(InvalidArtifact):self.run_pair()
+
+
+class WaivedPairGate(PairGate):
+    def setUp(self):
+        super().setUp()
+        from test_waiver import fixture,NOW,TEST_POLICY
+        from waiver import evaluate
+        self.now=NOW
+        policy=self.directory/'policy.json';policy.write_text(json.dumps(TEST_POLICY))
+        mock=patch('waiver.POLICY',policy);mock.start();self.addCleanup(mock.stop)
+        report=self.reports['aarch64']
+        report.update(fixture(self.directory,self.lock['upstream_sha']))
+        decision=evaluate(report,REQUIRED,self.directory,self.now)
+        self.assertEqual(decision['outcome'],'WAIVED')
+        report.update(automated_status='waived',automated_decision=decision)
+    def run_pair(self):
+        from waiver import evaluate
+        with patch('pair.evaluate',side_effect=lambda *args:evaluate(*args,now=self.now)):
+            return super().run_pair()
+    def test_pair_summary_labels_known_issue_without_unlocking(self):
+        self.run_pair()
+        summary=json.loads((self.directory/'verification-pair.json').read_text())
+        self.assertEqual(summary['automated_status'],'WAIVED')
+        self.assertFalse(summary['release_ready'])
+        self.assertEqual(summary['known_issues'][0]['source_commit'],self.lock['upstream_sha'])
+        self.assertEqual(next(c for c in self.reports['aarch64']['checks'] if c['name']=='xcb-gui-openuri-quit-rapid')['status'],'fail')
+    def test_pair_rechecks_expiry(self):
+        from waiver import utc
+        self.now=utc('2026-11-16T00:00:00Z')
+        with self.assertRaises(InvalidArtifact):self.run_pair()
+    def test_x86_failure_blocks_waived_pair(self):
+        self.reports['x86_64']['checks'][0]['status']='fail'
+        with self.assertRaises(InvalidArtifact):self.run_pair()
+    def test_missing_waiver_log_blocks_pair(self):
+        (self.directory/self.reports['aarch64']['rapid_quit_evidence']['log_name']).unlink()
+        with self.assertRaises(InvalidArtifact):self.run_pair()
+    def test_provenance_mismatch_blocks_waived_pair(self):
+        self.reports['aarch64']['sdk_commit']='f'*64
+        with self.assertRaises(InvalidArtifact):self.run_pair()
+    def test_missing_recorded_waiver_blocks_pair(self):
+        del self.reports['aarch64']['automated_decision']
+        with self.assertRaises(InvalidArtifact):self.run_pair()

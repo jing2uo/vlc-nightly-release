@@ -7,6 +7,10 @@ VLC is built from a pinned master commit with one explicitly recorded downstream
 contrib recipes inside the actual `org.kde.Sdk//6.11` Flatpak SDK. Qt 6 and KF6
 belong to the matching `org.kde.Platform//6.11` runtime.
 
+**Temporary exception:** the known ARM64 X11 rapid-quit assertion may be reported
+as WAIVED through November 15 UTC, under the strict
+[14-day waiver policy](docs/aarch64-x11-waiver.md). Its raw test remains FAIL.
+
 **Publication remains disabled.** Phase 2 now runs artifact, dependency,
 relocation, decoding, GUI/MPRIS and audio gates against the actual KDE Platform.
 See [verification commands](docs/verification.md) and
