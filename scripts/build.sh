@@ -18,6 +18,7 @@ finish() {
     while IFS= read -r -d '' file; do
       case $file in
         po/*.po|po/vlc.pot) catalogs+=("$file");;
+        src/network/stream.c) :;; # Exact postimage verified below, never ignored.
         *) echo "Unexpected tracked source change: $file" >&2; rc=1;;
       esac
     done < <(git -C /work/source diff --name-only -z HEAD --)
@@ -25,6 +26,9 @@ finish() {
       git -C /work/source diff --binary HEAD -- "${catalogs[@]}" > /work/logs/generated-catalogs.patch
       git -C /work/source restore --source="$VLC_SHA" --worktree -- "${catalogs[@]}" || rc=1
     fi
+  fi
+  if [[ $source_verified == true ]]; then
+    python3 /recipe/scripts/source_patches.py restore /work/source /work/inputs.json || rc=1
   fi
   /recipe/scripts/resources.sh "exit-$rc" || true
   if [[ -n ${build:-} && -f $build/config.log ]]; then cp "$build/config.log" /work/logs/config.log; fi
@@ -37,6 +41,7 @@ trap finish EXIT
 [[ $(git -C /work/source rev-parse HEAD) == "$VLC_SHA" ]]
 git -C /work/source diff --quiet HEAD -- || { echo 'Tracked source edits are not allowed' >&2; exit 1; }
 [[ $(git -C /work/source describe --always HEAD) == "$VERSION" ]]
+python3 /recipe/scripts/source_patches.py apply /work/source /work/inputs.json
 source_verified=true
 # Remove host-controlled search paths; /usr is exclusively the mounted KDE SDK.
 unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH LIBRARY_PATH LD_LIBRARY_PATH PKG_CONFIG_PATH CMAKE_PREFIX_PATH
@@ -83,6 +88,7 @@ stage() {
   /recipe/scripts/resources.sh "$name" || rc=$?
   if (( rc )); then tail -n 70 "/work/logs/$name.log"; return "$rc"; fi
 }
+stage transport-regression python3 /recipe/verification/tfo-transport-test.py /work/source
 source /recipe/scripts/contrib.sh
 build_contrib
 # Native SDK tools have generic names, not the compiler aliases searched by
@@ -90,7 +96,8 @@ build_contrib
 export BUILDCC='gcc -std=gnu17' OBJCOPY=/usr/bin/objcopy
 cd /work/source
 stage vlc-bootstrap ./bootstrap
-build=/work/vlc-build/$CACHE_KEY/$VLC_SHA
+patch_key=$(sha256sum /recipe/patches/manifest.json | cut -d' ' -f1)
+build=/work/vlc-build/$CACHE_KEY/$VLC_SHA-$patch_key
 mkdir -p "$build"
 cd "$build"
 # Preserve upstream flags. /app/extra is the future extra-data installation root.
@@ -118,6 +125,7 @@ rm -rf "$payload/share/aclocal" "$payload/share/pkgconfig" "$payload/share/cmake
 python3 /recipe/scripts/prepare-payload.py "$payload" /work/source "$VLC_SHA"
 mkdir -p "$payload/share/vlc/build"
 cp /work/inputs.json "$payload/share/vlc/build/inputs.json"
+cp -a /recipe/patches "$payload/share/vlc/build/patches"
 cp /work/logs/toolchain.log "$payload/share/vlc/build/"
 stage qt-abi python3 /recipe/verification/qt_abi.py --payload "$payload" \
   --runtime "$TARGET_RUNTIME_ROOT" --arch "$arch" --inputs /work/inputs.json --output /work/logs/qt-abi.json

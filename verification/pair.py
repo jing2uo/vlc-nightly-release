@@ -44,6 +44,9 @@ def verify(directory):
             require(qt.get('status')=='pass','missing or incompatible Qt ABI report')
             require(qt.get('compiled_qt_version')==lock['qt_abi'][arch]['sdk']['qt_version'],'wrong compiled Qt version')
             require(qt.get('runtime_qt_version')==lock['qt_abi'][arch]['platform']['qt_version'],'wrong target Qt version')
+        if lock.get('packaging_revision',0)>=3:
+            require(report.get('source_patches')==lock.get('source_patches') and bool(lock.get('source_patches')),
+                    'source patch verification mismatch')
         checks={}
         for check in report['checks']:
             require(check['name'] not in checks,'duplicate verification check')

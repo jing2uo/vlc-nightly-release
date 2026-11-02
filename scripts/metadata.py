@@ -14,10 +14,11 @@ import time
 
 ROOT=Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(ROOT/'verification'))
+from source_patches import identity as patch_identity
 from runtime_paths import collect_evidence, evidence_matches
 from qt_identity import artifact_version, release_identity, validate_inputs
 
-PACKAGING_REVISION = 2
+PACKAGING_REVISION = 3
 
 
 def git(*args):
@@ -30,6 +31,8 @@ def digest_recipe():
     for p in sorted((root/'scripts').glob('*')):
         if p.is_file():
             h.update(p.name.encode() + b'\0' + p.read_bytes())
+    for p in sorted((root/'patches').glob('*')):
+        if p.is_file():h.update(p.name.encode()+b'\0'+p.read_bytes())
     h.update((root/'container/Containerfile').read_bytes())
     for name in ('runtime_paths.py','runtime-path-policy.json','qt_abi.py'):
         h.update(name.encode()+b'\0'+(root/'verification'/name).read_bytes())
@@ -52,6 +55,7 @@ elif mode == 'recipe':
     print(digest_recipe())
 elif mode == 'repackage':
     d=json.loads(p.read_text())
+    assert d.get('source_patches')==patch_identity('/work/source',d['upstream_sha']), 'Rebuild VLC: historical binaries lack the current source patch provenance'
     d.update(artifact_version=artifact_version(d['version'],PACKAGING_REVISION,d['qt_abi']) if 'qt_abi' in d else d['version']+f'-r{PACKAGING_REVISION}',
              packaging_revision=PACKAGING_REVISION,recipe_sha256=digest_recipe())
     Path(args[0]).write_text(json.dumps(d,indent=2)+'\n')
@@ -71,6 +75,7 @@ elif mode == 'resolve':
                 for name in ('Sdk', 'Platform')}
         assert all(re.fullmatch('[0-9a-f]{64}', value) for value in pins.values())
         data['architectures'][arch] = pins
+    data['source_patches']=patch_identity('/work/source',data['upstream_sha'])
     evidence=collect_evidence('/work/source',data['upstream_sha'],ROOT)
     assert evidence_matches(evidence,data['upstream_sha']), 'Relevant runtime-path source/configuration changed; review the content policy'
     data['runtime_path_evidence']=evidence
@@ -83,6 +88,7 @@ elif mode == 'check':
     d = json.loads(p.read_text())
     assert d['recipe_sha256'] == digest_recipe(), 'Recipe differs from resolved inputs; resolve again'
     assert d['upstream_sha'] == git('rev-parse', 'HEAD')
+    assert d['source_patches']==patch_identity('/work/source',d['upstream_sha']), 'Source patch identity mismatch'
     assert d['runtime_path_evidence']==collect_evidence('/work/source',d['upstream_sha'],ROOT), 'Runtime-path evidence differs from build inputs'
     assert evidence_matches(d['runtime_path_evidence'],d['upstream_sha']), 'Unreviewed path behavior'
     assert d['qt_abi_identity']==release_identity(d['qt_abi'])

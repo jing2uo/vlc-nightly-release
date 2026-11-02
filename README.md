@@ -2,7 +2,8 @@
 
 Public VLC nightly build infrastructure. A personal or organization GitHub
 repository is supported; the workflow uses its actual repository context.
-VLC is built from an unchanged, pinned master commit, using its own tools and
+VLC is built from a pinned master commit with one explicitly recorded downstream
+[TCP Fast Open fallback correction](docs/tfo-eacces-fix.md), using its own tools and
 contrib recipes inside the actual `org.kde.Sdk//6.11` Flatpak SDK. Qt 6 and KF6
 belong to the matching `org.kde.Platform//6.11` runtime.
 
@@ -39,7 +40,7 @@ the SDK as `/usr`; neither the container's nor the host's libraries are used for
 compilation. Container recreation retains source, SDK installation, intermediate
 objects, tarballs and logs under `work/`.
 
-Build output is `work/dist/vlc-<git-describe>-r2-qt<identity>-<arch>.tar.zst`, its SHA-256 and byte
+Build output is `work/dist/vlc-<git-describe>-r3-qt<identity>-<arch>.tar.zst`, its SHA-256 and byte
 size, and per-architecture JSON provenance. The archive has a single top-level `extra/` directory. Manual staging extracts
 under `/app`; a future extra-data installer must strip that one component while
 extracting inside its writable `/app/extra` directory. The input lock records upstream `version` separately from `artifact_version`

@@ -1,0 +1,15 @@
+--- a/src/network/stream.c
++++ b/src/network/stream.c
+@@ -385,9 +385,9 @@
+             return -1;
+     }
+     else
+-    if (errno != EOPNOTSUPP)
+-        return -1;
+-    /* Fast open not supported or disabled... fallback to normal mode */
++    if (errno != EOPNOTSUPP && errno != EACCES)
++        return -1;
++    /* Fast open unsupported or denied: try an ordinary TCP connection. */
+ #endif
+ 
+     if (vlc_tls_Connect(tls))

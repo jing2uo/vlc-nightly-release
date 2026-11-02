@@ -117,6 +117,7 @@ try:
         extraction=app/'extract';shutil.rmtree(extraction,ignore_errors=True)
         integrity=audit(archive,arch,lock,metadata,destination=extraction)
         shutil.move(str(extraction/'extra'),app/'files/extra');extraction.rmdir()
+    record['source_patches']=lock.get('source_patches')
     record.update({k:integrity[k] for k in ('sha256','size','unpacked_bytes')})
     result('archive-integrity-provenance-safety','pass',f'{integrity["members"]} entries; {integrity["size"]} bytes')
     cmd('archive-negative-tests',['python3','-m','unittest','discover','-s',str(root),'-p','test_*.py'])

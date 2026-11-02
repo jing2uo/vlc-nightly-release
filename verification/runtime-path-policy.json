@@ -60,7 +60,7 @@
   },
   "recipes": {
     "scripts/contrib.sh": "42b7ee93b431a319132eb1b3f5213f62fb0552d26a45ed691e2a098f0b23c95b",
-    "scripts/build.sh": "91412e6e233e95f94e7f70af139a916269395af777f62ef2e8b22cc7616405f3",
+    "scripts/build.sh": "6adb939c68e3a27464f055253eeff3bf9e4096dfadf29e922bc34b95cf29507d",
     "scripts/vlc-nightly": "00d801b314e5fef89a812c0cb7fcce9b9bcd2e39e8454831a698f0608868a69c",
     "scripts/prepare-payload.py": "45068d29a26a07a3af04ac4656a5390b7162fdb354f2d438e762ed2e20dcf12e"
   }

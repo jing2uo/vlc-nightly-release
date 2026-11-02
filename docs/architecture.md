@@ -1,3 +1,9 @@
+# Current source policy
+
+Revision 3 includes the explicitly approved, content-pinned TCP Fast Open EACCES
+fallback patch. See [implementation and provenance](tfo-eacces-fix.md). Statements
+below about an unchanged application source describe the previous r2 baseline.
+
 # Build architecture and audit inputs
 
 The specification is the [maintainer proposal of October 31, 2026](https://github.com/flatpark/flatpark/pull/910)

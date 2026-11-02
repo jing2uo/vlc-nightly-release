@@ -88,12 +88,14 @@ def drain_padding(tf):
         require(count <= 1024 * 1024 and not chunk.strip(b'\0'), 'unexpected trailing archive data/padding')
 
 
-def inspect(path):
+def inspect(path, expected_patches=()):
     proc, tf = stream(path)
     try:
         members = []
         total = 0
         embedded = None
+        required_patches={'extra/share/vlc/build/'+p['path']:p['sha256'] for p in expected_patches}
+        found_patches=set()
         for m in tf:
             # Check budgets before tarfile advances over the next member body.
             require(m.size >= 0, 'negative member size')
@@ -103,6 +105,12 @@ def inspect(path):
             if m.name.rstrip('/') == 'extra/share/vlc/build/inputs.json':
                 require(m.isfile() and m.size < 131072, 'invalid embedded provenance')
                 embedded = json.load(tf.extractfile(m))
+            if m.name.rstrip('/') in required_patches:
+                require(m.isfile() and m.size<1048576, 'invalid published source patch')
+                name=m.name.rstrip('/')
+                require(hashlib.sha256(tf.extractfile(m).read()).hexdigest()==required_patches[name], 'published source patch checksum mismatch')
+                found_patches.add(name)
+        require(found_patches==set(required_patches),'missing published source patches')
         drain_padding(tf)
         entries, size = namespace(members)
         require(proc.wait() == 0, 'zstd decompression failed')
@@ -182,7 +190,7 @@ def audit(path, arch, lock, metadata, expected_sha=None, destination=None):
     require(lock['sdk'] == 'org.kde.Sdk//6.11' and lock['runtime'] == 'org.kde.Platform//6.11', 'wrong target')
     for key, value in lock.items():
         require(metadata.get(key) == value, f'build metadata mismatch: {key}')
-    entries, unpacked, embedded = inspect(path)
+    entries, unpacked, embedded = inspect(path,lock.get('source_patches',{}).get('patches',[]))
     require(embedded == lock, 'embedded input lock mismatch')
     for name in ('extra/bin/vlc', 'extra/bin/vlc-nightly', 'extra/lib/vlc/vlc-cache-gen'):
         require(name in entries and (entries[name].isfile() or entries[name].issym()) and entries[name].mode & 0o111,
@@ -192,6 +200,14 @@ def audit(path, arch, lock, metadata, expected_sha=None, destination=None):
         require(name in entries, f'missing payload component: {name}')
     for name in ('libqt_plugin.so', 'libavcodec_plugin.so'):
         require(any(n.endswith('/'+name) for n in entries), f'missing required plugin: {name}')
+    if lock.get('packaging_revision',0)>=3:
+        patches=lock.get('source_patches',{})
+        require(patches.get('base_sha')==lock['upstream_sha'] and bool(patches.get('patches')), 'missing patch provenance')
+        reviewed=json.loads((Path(__file__).resolve().parent.parent/'patches/manifest.json').read_text())
+        require(patches.get('schema')==reviewed['schema'] and patches.get('patches')==reviewed['patches'],
+                'unreviewed source patch provenance')
+        for patch in patches['patches']:
+            require('extra/share/vlc/build/'+patch['path'] in entries,'missing published source patch')
     if lock.get('packaging_revision',0)>=2:
         require('extra/share/vlc/hrtfs/dodeca_and_7channel_3DSL_HRTF.sofa' in entries,'missing upstream HRTF data')
     if destination:

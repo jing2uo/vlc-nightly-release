@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "patches": [
+    {
+      "path": "patches/vlc-tfo-eacces.patch",
+      "source": "src/network/stream.c",
+      "sha256": "dc0222e877fb1059371534f18d5af72fb3e4fe8f998970619017330a871f8ebc",
+      "before_sha256": "dbd070832d0601a10d7cf270fb267fe31be1b3d90f0a294750931541a5199077",
+      "after_sha256": "02c0e42b17ca3313b2c5f3f6882e46756b2b1135988b435920d74d983c8af275",
+      "origin": "Downstream correction approved by user; no upstream acceptance claimed",
+      "purpose": "Fall back to ordinary TCP when MSG_FASTOPEN returns EACCES"
+    }
+  ]
+}

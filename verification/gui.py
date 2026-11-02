@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+from mpris_control import pause_resume
 import re
 import shlex
 import shutil
@@ -85,7 +86,7 @@ def exercise(a,app,out,fp,wrapped,cmd,result,base,record):
                ('gui-openuri-quit-rapid','/app/verify/fixtures/h264-aac.mp4')]+endpoints
         for label,media in cases:
             name=mode+'-'+label;file=out/(name+'.log')
-            before=names();bus=None;positions=[];state=[];metadata=[]
+            before=names();bus=None;positions=[];state=[];metadata=[];control_events=[]
             args=['/app/extra/bin/vlc-nightly','--ignore-config','--no-one-instance',
                   '--no-qt-privacy-ask','--no-metadata-network-access','--no-video-title-show',
                   '--run-time=8','-I','qt','-vvv',media]
@@ -110,12 +111,13 @@ def exercise(a,app,out,fp,wrapped,cmd,result,base,record):
                             state.append(s.stdout.strip());positions.append(t.stdout.strip())
                             md=call(bus,'org.freedesktop.DBus.Properties.Get','org.mpris.MediaPlayer2.Player','Metadata')
                             metadata.append(md.stdout.strip())
-                            if label=='gui-local-h264' and not pause_attempted and 'Playing' in s.stdout:
+                            progress=[int(n) for n in re.findall(r'int64 (\d+)',t.stdout)]
+                            if (label=='gui-local-h264' and not pause_attempted and 'Playing' in s.stdout
+                                    and progress and max(progress)>500000):
+                                # Ordinary control checks require established playback,
+                                # not a first Playing notification during output startup.
                                 pause_attempted=True
-                                call(bus,'org.mpris.MediaPlayer2.Player.Pause');time.sleep(.5)
-                                paused=call(bus,'org.freedesktop.DBus.Properties.Get','org.mpris.MediaPlayer2.Player','PlaybackStatus')
-                                pause_ok='Paused' in paused.stdout
-                                call(bus,'org.mpris.MediaPlayer2.Player.Play')
+                                pause_ok=pause_resume(bus,call,control_events)
                         if time.monotonic()-start>4 and not capture_attempted and mode=='xcb':
                             capture_attempted=True
                             capture=snapshot(out,name+'-window')
@@ -145,7 +147,7 @@ def exercise(a,app,out,fp,wrapped,cmd,result,base,record):
                     if process.poll() is None:process.kill();process.wait()
             text=file.read_text(errors='replace')
             (out/(name+'-mpris.json')).write_text(json.dumps(dict(bus=bus,states=state,positions=positions,
-                pause_resume=pause_ok,open_uri=open_ok,metadata=metadata,exit_code=rc,screenshot=capture),indent=2)+'\n')
+                pause_resume=pause_ok,control_events=control_events,open_uri=open_ok,metadata=metadata,exit_code=rc,screenshot=capture),indent=2)+'\n')
             fatal=bool(re.search(r'Segmentation fault|SIGSEGV|QQmlApplicationEngine failed|module ".*" is not installed|Failed to create.*(?:OpenGL|RHI)',text))
             numbers=[int(n) for s in positions for n in re.findall(r'int64 (\d+)',s)]
             playing=any('Playing' in s for s in state) and numbers and max(numbers)>500000

@@ -51,6 +51,22 @@ class ArchiveSafety(unittest.TestCase):
             compressed=directory/'input.tar.zst'
             subprocess.run(['zstd','-q',str(tar),'-o',str(compressed)],check=True)
             with self.assertRaises(InvalidArtifact):inspect(compressed)
+    def test_published_patch_contents_must_match(self):
+        import io,hashlib
+        with tempfile.TemporaryDirectory() as directory:
+            directory=Path(directory);tar=directory/'input.tar'
+            data=b'reviewed patch';name='extra/share/vlc/build/patches/test.patch'
+            with tarfile.open(tar,'w') as tf:
+                m=entry(name);m.size=len(data);tf.addfile(m,io.BytesIO(data))
+            compressed=directory/'input.tar.zst'
+            subprocess.run(['zstd','-q',str(tar),'-o',str(compressed)],check=True)
+            expected=[dict(path='patches/test.patch',sha256=hashlib.sha256(data).hexdigest())]
+            inspect(compressed,expected)
+            expected[0]['sha256']='0'*64
+            with self.assertRaisesRegex(InvalidArtifact,'checksum'):inspect(compressed,expected)
+            expected[0]['path']='patches/missing.patch'
+            with self.assertRaisesRegex(InvalidArtifact,'missing published'):inspect(compressed,expected)
+
     def test_unpacked_budget(self):
         m=entry('extra/huge');m.size=9*2**30;self.reject([m])
 
