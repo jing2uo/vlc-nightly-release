@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 from archive import audit, require
 from waiver import evaluate,utc
+from runtime_paths import evidence_matches
 
 # One release policy shared by the native runner and pair validation.
 # Advanced diagnostics are retained, but are never release prerequisites.
@@ -24,6 +25,7 @@ def verify(directory):
     lock=json.loads((directory/'inputs.json').read_text())
     # A failed re-evaluation must not leave an older WAIVED summary active.
     (directory/'verification-pair.json').write_text(json.dumps(dict(automated_status='FAIL',known_issues=[],release_ready=False))+'\n')
+    require(evidence_matches(lock.get('runtime_path_evidence'),lock['upstream_sha']), 'Invalid runtime-path input evidence')
     reports=[];sizes={};sums=[]
     for arch in ('x86_64','aarch64'):
         path=directory/f'vlc-{lock.get("artifact_version",lock["version"])}-{arch}.tar.zst'
@@ -45,6 +47,7 @@ def verify(directory):
         if lock.get('packaging_revision',0)>=3:
             require(report.get('source_patches')==lock.get('source_patches') and bool(lock.get('source_patches')),
                     'source patch verification mismatch')
+        require(report.get('runtime_path_evidence')==lock['runtime_path_evidence'], 'Runtime-path report/input evidence mismatch')
         checks={}
         for check in report['checks']:
             require(check['name'] not in checks,'duplicate verification check')

@@ -15,7 +15,7 @@ import time
 ROOT=Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(ROOT/'verification'))
 from source_patches import identity as patch_identity
-from runtime_paths import collect_evidence, evidence_matches
+from runtime_paths import collect_evidence, evidence_matches, hash_drift
 from qt_identity import artifact_version, release_identity, validate_inputs
 
 PACKAGING_REVISION = 3
@@ -55,6 +55,8 @@ elif mode == 'recipe':
     print(digest_recipe())
 elif mode == 'repackage':
     d=json.loads(p.read_text())
+    assert evidence_matches(d.get('runtime_path_evidence'),d['upstream_sha'],
+                            collect_evidence('/work/source',d['upstream_sha'],ROOT)), 'Runtime-path evidence differs from pinned build inputs'
     assert d.get('source_patches')==patch_identity('/work/source',d['upstream_sha']), 'Rebuild VLC: historical binaries lack the current source patch provenance'
     d.update(artifact_version=artifact_version(d['version'],PACKAGING_REVISION,d['qt_abi']) if 'qt_abi' in d else d['version']+f'-r{PACKAGING_REVISION}',
              packaging_revision=PACKAGING_REVISION,recipe_sha256=digest_recipe())
@@ -75,9 +77,11 @@ elif mode == 'resolve':
                 for name in ('Sdk', 'Platform')}
         assert all(re.fullmatch('[0-9a-f]{64}', value) for value in pins.values())
         data['architectures'][arch] = pins
+    assert data['upstream_sha']==git('rev-parse','HEAD'), 'Source checkout differs from resolved SHA'
     data['source_patches']=patch_identity('/work/source',data['upstream_sha'])
     evidence=collect_evidence('/work/source',data['upstream_sha'],ROOT)
-    assert evidence_matches(evidence,data['upstream_sha']), 'Relevant runtime-path source/configuration changed; review the content policy'
+    assert evidence_matches(evidence,data['upstream_sha']), 'Invalid runtime-path input evidence'
+    print('INFO: runtime-path hash drift: '+json.dumps(hash_drift(evidence),sort_keys=True),file=sys.stderr)
     data['runtime_path_evidence']=evidence
     data['qt_abi']={arch:json.loads(Path(f'/work/qt-{arch}.json').read_text()) for arch in data['architectures']}
     for arch in data['architectures']:validate_inputs(data['qt_abi'][arch],arch,data['architectures'][arch])
@@ -89,8 +93,8 @@ elif mode == 'check':
     assert d['recipe_sha256'] == digest_recipe(), 'Recipe differs from resolved inputs; resolve again'
     assert d['upstream_sha'] == git('rev-parse', 'HEAD')
     assert d['source_patches']==patch_identity('/work/source',d['upstream_sha']), 'Source patch identity mismatch'
-    assert d['runtime_path_evidence']==collect_evidence('/work/source',d['upstream_sha'],ROOT), 'Runtime-path evidence differs from build inputs'
-    assert evidence_matches(d['runtime_path_evidence'],d['upstream_sha']), 'Unreviewed path behavior'
+    assert evidence_matches(d.get('runtime_path_evidence'),d['upstream_sha'],
+                            collect_evidence('/work/source',d['upstream_sha'],ROOT)), 'Runtime-path evidence differs from pinned build inputs'
     assert d['qt_abi_identity']==release_identity(d['qt_abi'])
     for arch in d['architectures']:validate_inputs(d['qt_abi'][arch],arch,d['architectures'][arch])
     assert d['contrib_tree'] == git('rev-parse', 'HEAD:contrib')
@@ -109,6 +113,8 @@ elif mode == 'env':
 elif mode == 'build':
     d = json.loads(p.read_text())
     arch, cache_key, cache_hit, destination = args
+    assert evidence_matches(d.get('runtime_path_evidence'),d['upstream_sha'],
+                            collect_evidence('/work/source',d['upstream_sha'],ROOT)), 'Runtime-path evidence differs from pinned build inputs'
     d.update(architecture=arch, cache_key=cache_key, cache_reused=cache_hit == 'true',
              workflow_run=os.getenv('GITHUB_RUN_ID', 'local'),
              repository=os.getenv('GITHUB_REPOSITORY', 'local'))

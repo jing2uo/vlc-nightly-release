@@ -146,8 +146,15 @@ try:
     result('fixture-codecs','pass','independent H.264 + SDK AAC')
     cmd('elf-static',fp(['/usr/bin/python3',root/'elf.py','/app/extra','/app/verify/elf.json'],sdk=True),timeout=120)
     elf=json.loads((app/'files/verify/elf.json').read_text());shutil.copy2(app/'files/verify/elf.json',out/'elf.json')
-    from runtime_paths import classify, GNUTLS, evidence_matches
-    result('runtime-path-source-evidence','pass' if evidence_matches(lock.get('runtime_path_evidence'),lock['upstream_sha']) else 'fail','relevant source and configuration content must match the reviewed policy')
+    from runtime_paths import classify, GNUTLS, evidence_matches, recipe_hashes, hash_drift
+    evidence=lock.get('runtime_path_evidence')
+    valid_evidence=evidence_matches(evidence,lock['upstream_sha'])
+    result('runtime-path-source-evidence','pass' if valid_evidence and evidence['recipes']==recipe_hashes(root.parent) else 'fail',
+           'Evidence must match the pinned source identity, build metadata, embedded lock and actual recipes')
+    record['runtime_path_evidence']=evidence
+    if valid_evidence:
+        record['runtime_path_drift']=hash_drift(evidence)
+        result('runtime-path-hash-drift','info',json.dumps(record['runtime_path_drift'],sort_keys=True),False)
     runtime_paths=classify(elf['temporary_strings'],lock['upstream_sha'],lock.get('packaging_revision',0),lock.get('runtime_path_evidence'))
     record['runtime_path_findings']=runtime_paths
     result('temporary-runtime-data-paths','fail' if any(x['status']!='pass' for x in runtime_paths) else 'pass',

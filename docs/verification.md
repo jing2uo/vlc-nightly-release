@@ -20,6 +20,18 @@ unchanged. The historical waiver is unnecessary for current optional stress
 results; its exact original time window remains unchanged for historical policy
 coverage. A core PASS does not certify advanced Beta features.
 
+Runtime-path source/configuration hashes in `inputs.json` describe the exact
+pinned Git tree and build recipes. `metadata.py check` and build metadata
+creation recollect and compare that evidence; tampering or source/recipe mismatch
+fails. Native reports retain the same evidence and pair validation requires exact
+agreement with the input lock and embedded build provenance. The old
+`runtime-path-policy.json` hashes are an informational audit baseline: resolve
+logs and native reports list changed, added and removed tracked files with hashes.
+Source drift alone does not authorize new runtime paths. Known consumer/path
+pairs remain narrowly classified; unknown paths, unsafe loader paths and missing
+runtime dependencies still fail. Optional API/filesystem traces remain available
+for deeper behavioral investigation; hashes alone do not prove runtime behavior.
+
 The sections below describe historical Phase 2 comprehensive coverage; references
 to mandatory advanced gates or disabled publication reflect that earlier policy.
 

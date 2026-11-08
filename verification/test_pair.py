@@ -14,6 +14,7 @@ class PairGate(unittest.TestCase):
         self.directory=Path(self.temp.name)
         self.lock=dict(upstream_sha='a'*40,version='4.0.0-dev-1-gaaaaaaaaaa',architectures={
             a:dict(sdk_commit='b'*64,platform_commit='c'*64) for a in ('x86_64','aarch64')})
+        self.lock['runtime_path_evidence']=dict(schema=1,source_sha=self.lock['upstream_sha'],sources={},recipes={})
         (self.directory/'inputs.json').write_text(json.dumps(self.lock))
         self.reports={}
         for arch in ('x86_64','aarch64'):
@@ -22,6 +23,7 @@ class PairGate(unittest.TestCase):
             self.reports[arch]=dict(schema=2,architecture=arch,upstream_sha=self.lock['upstream_sha'],
                 version=self.lock['version'],sdk_commit='b'*64,runtime_commit='c'*64,
                 sha256='d'*64,size=123,verification_sha256='e'*64,automated_status='pass',
+                runtime_path_evidence=copy.deepcopy(self.lock['runtime_path_evidence']),
                 checks=[dict(name=n,status='pass',mandatory=True) for n in REQUIRED])
     def run_pair(self):
         for arch,report in self.reports.items():
@@ -44,6 +46,18 @@ class PairGate(unittest.TestCase):
             saved=self.reports['aarch64'][field];self.reports['aarch64'][field]='0'*64
             with self.assertRaises(InvalidArtifact):self.run_pair()
             self.reports['aarch64'][field]=saved
+    def test_tampered_runtime_path_evidence(self):
+        self.reports['aarch64']['runtime_path_evidence']['source_sha']='f'*40
+        with self.assertRaises(InvalidArtifact):self.run_pair()
+    def test_invalid_lock_evidence_invalidates_old_pair_summary(self):
+        (self.directory/'verification-pair.json').write_text('{"automated_status":"PASS"}')
+        lock=copy.deepcopy(self.lock);lock['runtime_path_evidence']['source_sha']='0'*40
+        (self.directory/'inputs.json').write_text(json.dumps(lock))
+        with self.assertRaises(InvalidArtifact):self.run_pair()
+        self.assertEqual(json.loads((self.directory/'verification-pair.json').read_text())['automated_status'],'FAIL')
+    def test_missing_runtime_path_evidence(self):
+        del self.reports['aarch64']['runtime_path_evidence']
+        with self.assertRaises(InvalidArtifact):self.run_pair()
     def test_different_verification_recipe(self):
         self.reports['aarch64']['verification_sha256']='f'*64
         with self.assertRaises(InvalidArtifact):self.run_pair()
