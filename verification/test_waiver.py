@@ -7,7 +7,10 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-from pair import REQUIRED
+from pair import REQUIRED as CORE_REQUIRED
+# Preserve regression coverage for the historical waiver policy independently
+# of the current, smaller release policy.
+REQUIRED=CORE_REQUIRED | {'xcb-gui-openuri-quit-rapid'}
 from waiver import evaluate,POLICY,utc
 
 NOW=utc('2026-11-03T12:00:00Z')

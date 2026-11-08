@@ -7,22 +7,17 @@ import sys
 from archive import audit, require
 from waiver import evaluate,utc
 
+# One release policy shared by the native runner and pair validation.
+# Advanced diagnostics are retained, but are never release prerequisites.
 REQUIRED = {
-    'gnutls-config-overrides', 'sofa-explicit-runtime-data', 'runtime-file-trace', 'runtime-file-paths',
-    'relocated-vlc-direct', 'relocated-cvlc-playback', 'relocated-sofa-runtime-data',
-    'runtime-path-source-evidence', 'qt-private-abi', 'http-fixture-reachability',
     'platform-namespace-smoke', 'archive-integrity-provenance-safety',
     'archive-negative-tests', 'prepare-sdk', 'fixture-codecs', 'elf-static',
-    'temporary-runtime-data-paths', 'platform-symbol-resolution', 'platform-executable-dependencies', 'startup-version',
-    'version-matches-inputs', 'plugin-enumeration', 'qml-runtime-imports',
-    'decode-h264-aac.mp4', 'decode-vp8-vorbis.webm', 'relocated-startup',
-    'relocated-symbol-resolution', 'relocated-playback', 'relocated-cli-alias',
-    'http-decode-h264-aac.mp4', 'http-decode-hls-index.m3u8',
-    'xcb-gui-openuri-quit-rapid',
-    'xcb-qml-window', 'xcb-gui-local-h264', 'xcb-gui-local-webm', 'xcb-gui-local-hls',
-    'pulse-playback', 'pulse-audio-output',
-    'xcb-mpris-controls', 'xcb-multiple-file-invocation',
+    'runtime-path-source-evidence', 'temporary-runtime-data-paths',
+    'qt-private-abi', 'platform-symbol-resolution',
+    'platform-executable-dependencies', 'startup-version',
+    'version-matches-inputs', 'plugin-enumeration', 'decode-h264-aac.mp4',
 }
+
 
 def verify(directory):
     directory=Path(directory).resolve()

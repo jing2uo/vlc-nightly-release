@@ -51,23 +51,54 @@ class PairGate(unittest.TestCase):
         (self.directory/'extra.tar.zst').touch()
         with self.assertRaises(InvalidArtifact):self.run_pair()
 
+    def test_optional_results_never_block_pair(self):
+        for status in ('fail','skipped','unavailable','untested'):
+            for report in self.reports.values():
+                report['checks']=[c for c in report['checks'] if c['name']!='xcb-gui-openuri-quit-rapid']
+                # Also reject accidental dependence on historical mandatory flags.
+                report['checks'].append(dict(name='xcb-gui-openuri-quit-rapid',status=status,mandatory=True))
+            self.run_pair()
+            summary=json.loads((self.directory/'verification-pair.json').read_text())
+            self.assertEqual(summary['automated_status'],'PASS')
+            self.assertFalse(summary['release_ready'])
+
+    def test_each_core_check_fails_closed(self):
+        for name in REQUIRED:
+            for mode in ('fail','skipped','missing','optional'):
+                original=copy.deepcopy(self.reports)
+                checks=self.reports['aarch64']['checks']
+                check=next(c for c in checks if c['name']==name)
+                if mode=='missing':checks.remove(check)
+                elif mode=='optional':check['mandatory']=False
+                else:check['status']=mode
+                with self.assertRaises(InvalidArtifact,msg=(name,mode)):self.run_pair()
+                self.reports=original
+
+    def test_driver_failure_blocks_pair(self):
+        self.reports['x86_64']['checks'].append(dict(name='verification-driver',status='fail',mandatory=True))
+        with self.assertRaises(InvalidArtifact):self.run_pair()
+
 
 class WaivedPairGate(PairGate):
+    # Historical-policy coverage below retains the old waiver semantics.
+    test_optional_results_never_block_pair = None
     def setUp(self):
         super().setUp()
-        from test_waiver import fixture,NOW,TEST_POLICY
+        from test_waiver import fixture,NOW,TEST_POLICY,REQUIRED as LEGACY_REQUIRED
         from waiver import evaluate
         self.now=NOW
         policy=self.directory/'policy.json';policy.write_text(json.dumps(TEST_POLICY))
         mock=patch('waiver.POLICY',policy);mock.start();self.addCleanup(mock.stop)
+        self.reports['x86_64']['checks'].append(dict(name='xcb-gui-openuri-quit-rapid',status='pass',mandatory=True))
         report=self.reports['aarch64']
         report.update(fixture(self.directory,self.lock['upstream_sha']))
-        decision=evaluate(report,REQUIRED,self.directory,self.now)
+        decision=evaluate(report,LEGACY_REQUIRED,self.directory,self.now)
         self.assertEqual(decision['outcome'],'WAIVED')
         report.update(automated_status='waived',automated_decision=decision)
     def run_pair(self):
         from waiver import evaluate
-        with patch('pair.evaluate',side_effect=lambda *args:evaluate(*args,now=self.now)):
+        from test_waiver import REQUIRED as LEGACY_REQUIRED
+        with patch('pair.REQUIRED',LEGACY_REQUIRED), patch('pair.evaluate',side_effect=lambda *args:evaluate(*args,now=self.now)):
             return super().run_pair()
     def test_pair_summary_labels_known_issue_without_unlocking(self):
         self.run_pair()

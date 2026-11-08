@@ -16,6 +16,10 @@ on:
         description: 'Publish an eligible production release'
         type: boolean
         default: true
+      diagnostics:
+        description: 'Run optional GUI, audio, network, relocation and runtime diagnostics (non-blocking)'
+        type: boolean
+        default: false
       trace_http:
         description: 'Temporary network syscall diagnostics; mandatory results unchanged'
         type: boolean
@@ -140,8 +144,10 @@ jobs:
       - name: Verify native payload in the pinned KDE Platform
         env:
           TRACE_HTTP: ${{ inputs.trace_http }}
+          DIAGNOSTICS: ${{ inputs.diagnostics }}
         run: |
           args=()
+          if [[ "$DIAGNOSTICS" == true ]]; then args+=(--diagnostics); fi
           if [[ "$TRACE_HTTP" == true ]]; then args+=(--trace-http); fi
           scripts/verify.sh --backend=podman --headless "${args[@]}"
       - uses: actions/upload-artifact@v7

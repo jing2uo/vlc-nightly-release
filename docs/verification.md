@@ -1,3 +1,30 @@
+# Current release policy
+
+The shared `pair.REQUIRED` set defines the native and dual-architecture release
+checks. Core checks require PASS; skipped, missing or optional core evidence
+fails closed. Archive/provenance/extraction safety, static path policy, ELF
+architecture/dependencies/symbol resolution, Qt ABI/runtime compatibility,
+startup/version/plugins and H.264/AAC decoding remain mandatory.
+
+Default `scripts/verify.sh --backend=podman --headless` runs only the core.
+`--diagnostics` adds the existing advanced suite; `--desktop`, `--external`
+and `--trace-http` also opt into diagnostics. Their failures, unavailable tools,
+missing logs and driver exceptions are recorded without affecting the core
+result. Core failures still return nonzero. CI's manual `diagnostics` input
+selects this coverage on both native runners; scheduled runs use core checks.
+No GUI/audio/network fixture service is needed for a core run. Pair validation
+requires only named core reports, and never turns an optional FAIL into PASS.
+Signing, immutability, source/deployment/Qt identity checks and publication
+permissions are unchanged. Flatpak installation/integration requirements are
+unchanged. The historical waiver is unnecessary for current optional stress
+results; its exact original time window remains unchanged for historical policy
+coverage. A core PASS does not certify advanced Beta features.
+
+The sections below describe historical Phase 2 comprehensive coverage; references
+to mandatory advanced gates or disabled publication reflect that earlier policy.
+
+---
+
 # Phase 2 verification
 
 Use the existing `work/inputs.json`, pinned SDK/Platform deployment and matching

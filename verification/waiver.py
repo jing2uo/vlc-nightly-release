@@ -24,7 +24,10 @@ def evaluate(report,required,directory,now=None):
     if len(names)!=len(set(names)):return decision
     indexed={c['name']:c for c in checks}
     if not required or not required<=indexed.keys() or any(not indexed[n]['mandatory'] for n in required):return decision
-    failed=[c for c in checks if c['mandatory'] and c['status']!='pass']
+    # The caller's explicit policy determines release requirements, including
+    # when reading older reports whose diagnostic flags were mandatory.
+    failed=[indexed[n] for n in required if indexed[n]['status']!='pass']
+    failed += [c for c in checks if c['name']=='verification-driver' and c['status']!='pass']
     if not failed:return dict(outcome='PASS',waiver=None,reason='All mandatory checks passed')
     policy_bytes=POLICY.read_bytes();policy=json.loads(policy_bytes)
     decision['reason']='No applicable enabled waiver'

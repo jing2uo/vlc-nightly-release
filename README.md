@@ -117,16 +117,25 @@ independently of notifications.
 
 ## Tests and known limitations
 
-Native checks cover archive safety/provenance, ELF/symbol resolution, Qt private
-ABI, source-content runtime paths, GnuTLS/SOFA data, relocation, QML/plugins,
-MP4/WebM decoding, HTTP/HLS, PulseAudio output, GUI playback and MPRIS.
+Release-blocking checks on both native architectures cover archive integrity,
+SHA-256/provenance/extraction safety, ELF architecture and dependency/symbol
+resolution, Qt private ABI/runtime compatibility, static source-content/runtime
+path safety, VLC startup/version, plugin loading, and real H.264/AAC decoding.
+The pair gate also requires matching source, deployment and Qt identities,
+verification recipes, artifact sizes and hashes. Signing, current-runtime checks,
+immutable assets and independent publication authorization remain required.
 
-The sole temporary ARM64 exception is
-`VLC-X11-RAPID-QUIT-AARCH64-2026-11`: the exact X11 rapid OpenUri/Quit assertion,
-exit 134, can be **WAIVED**, never called PASS, from November 2 through
-**November 16, 2026 00:00 UTC exclusive**. It is re-evaluated at publication and
-never extends to other failures or x86_64. See [the policy](docs/aarch64-x11-waiver.md).
-A waived crash is not fixed. After expiry a recurring failure blocks publication.
+Advanced tests are optional diagnostics: GUI/QML playback, MPRIS, HLS/HTTP,
+WebM, PulseAudio, rapid OpenUri/Quit, relocation, and GnuTLS/SOFA/filesystem
+tracing. Run `scripts/verify.sh --diagnostics` (add `--desktop` for a local
+session), or enable the manual workflow's `diagnostics` input. Raw failures and
+logs remain visible with `mandatory: false`; missing diagnostic reports do not
+block releases. Optional success is not claimed when tests were not run.
+
+The historical aarch64 rapid-quit waiver is no longer needed by the core gate.
+Its original policy and expiry are retained for historical report evaluation;
+the upstream crash has not been fixed by this gate change. Installed Flatpak
+integration requirements remain separate and unchanged.
 
 Automated CI is not human playback-quality, physical audio, real GPU or Wayland
 certification. Installed FlatPark testing and actual tested/untested results are

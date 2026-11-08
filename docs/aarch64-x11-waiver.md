@@ -1,3 +1,7 @@
+> Historical policy: rapid OpenUri/Quit is now an optional diagnostic. The
+> current core release gate does not need or apply this waiver. Its original
+> policy and expiration below are retained unchanged as historical evidence.
+
 # Temporary ARM64 X11 rapid-quit waiver
 
 The explicitly enabled policy is [verification/x11-waiver.json](../verification/x11-waiver.json):

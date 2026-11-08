@@ -8,11 +8,13 @@ backend=auto
 headless=false
 candidate=
 args=()
+advanced=false
 for option in "$@"; do
   case $option in
     --backend=*) backend=${option#*=};;
     --dist=*) candidate=$(realpath -- "${option#*=}");;
     --headless) headless=true;;
+    --diagnostics|--desktop|--external|--trace-http) advanced=true; args+=("$option");;
     *) args+=("$option");;
   esac
 done
@@ -44,8 +46,15 @@ if ! podman run --rm --userns=keep-id --cap-drop=ALL --security-opt 'unmask=/pro
   export VLC_VERIFY_BACKEND=host-fallback
   exec python3 "$root/verification/run.py" --work "$work" --arch "$arch" "${host_args[@]}"
 fi
-podman build -t localhost/vlc-nightly-verifier -f "$root/container/Verification.Containerfile" "$root/container"
+image=localhost/vlc-nightly-builder
+if [[ $advanced == true ]]; then
+  if podman build -t localhost/vlc-nightly-verifier -f "$root/container/Verification.Containerfile" "$root/container"; then
+    image=localhost/vlc-nightly-verifier
+  else
+    echo 'Optional diagnostic image setup failed; retaining core environment and recording available diagnostics' >&2
+  fi
+fi
 exec podman run --rm --userns=keep-id --cap-drop=ALL --security-opt 'unmask=/proc/*' \
   --security-opt label=disable --volume "$root:/recipe:ro" --volume "$work:/work" \
-  --env VLC_VERIFY_BACKEND=podman --entrypoint /bin/bash localhost/vlc-nightly-verifier \
+  --env VLC_VERIFY_BACKEND=podman --entrypoint /bin/bash "$image" \
   /recipe/verification/headless.sh "$arch" "${container_args[@]}"
