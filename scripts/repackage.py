@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Repackage an audited historical build; never alter the input archive or ELFs."""
+"""Repackage an audited historical build; strip only the staged ELF copies."""
 import argparse
 import hashlib
 import json
@@ -39,13 +39,14 @@ lock=json.loads((dest/'inputs.json').read_text())
 updated=dict(metadata,**lock,binary_build=metadata,repackaged_from=dict(sha256=original['sha256'],size=original['size'],filename=asset.name),
              packaging_run='local-task-2.1',cache_reused=True)
 (dest/f'build-{arch}.json').write_text(json.dumps(updated,indent=2)+'\n')
-# Prove packaging preserved every original ELF, including the renamed entry point.
+# Prove launcher adaptation preserved every ELF before package.sh strips staged copies.
 elf_hashes=elf_inventory()
 expected={('bin/vlc.bin' if name=='bin/vlc' else name):digest for name,digest in original_elfs.items()}
 require(elf_hashes==expected,'packaging changed an ELF binary')
-(dest/f'elf-sha256-{arch}.json').write_text(json.dumps(elf_hashes,indent=2)+'\n')
 env=os.environ.copy();env.update(SOURCE_DATE_EPOCH=str(lock['source_epoch']),DIST_DIR=str(dest),EXTRACT_TMPDIR=str(dest.parent))
 subprocess.run([root/'scripts/package.sh',payload,arch,lock['artifact_version']],env=env,check=True)
+# package.sh strips staged copies; record the hashes of the actual shipped ELFs.
+(dest/f'elf-sha256-{arch}.json').write_text(json.dumps(elf_inventory(),indent=2)+'\n')
 newasset=dest/f'vlc-{lock["artifact_version"]}-{arch}.tar.zst'
 result=audit(newasset,arch,lock,updated)
 result.update(elapsed_seconds=round(time.monotonic()-start,2),elfs_recompiled=False,original_sha256=original['sha256'])
