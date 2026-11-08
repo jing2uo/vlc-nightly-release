@@ -1,13 +1,8 @@
-# VLC 4 development releases for FlatPark
+## [!IMPORTANT]
 
-A community-maintained VLC 4 build and release pipeline for FlatPark's
-`org.videolan.VLCBeta`. These are **not official VideoLAN binary releases** and
-are separate from Flathub's stable VLC distribution.
+#### Issue Reporting: Report issues here first. Contact VideoLAN only for confirmed upstream bugs.
 
-The production workflow is implemented here. **The first public release and
-FlatPark acceptance are still pending manual upload/execution.** No production
-release URL or FlatPark availability is claimed yet. See
-[Phase 3 handoff](docs/phase-3.md) for the exact remaining steps and test evidence.
+#### Transparency & Security: Built through public GitHub Actions with traceable sources and immutable releases. Flatpak sandboxing limits permissions when installed as a Flatpak. These safeguards reduce risks.
 
 ## Builds and provenance
 
