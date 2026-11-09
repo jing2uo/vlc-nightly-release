@@ -1,3 +1,10 @@
+# VLC 4 development builds
+
+Community-maintained VLC 4 development builds for FlatPark's
+[`org.videolan.VLCBeta`](https://flatpark.org/apps/org.videolan.VLCBeta/),
+with native x86_64 and aarch64 releases. These are not official VideoLAN binary
+releases and are separate from Flathub's stable VLC package.
+
 ## [!IMPORTANT]
 
 #### Issue Reporting: Report issues here first. Contact VideoLAN only for confirmed upstream bugs.
@@ -35,7 +42,9 @@ source/contrib/SDK caches are retained; incompatible binary outputs are rejected
 ## Production releases
 
 Versions are `4.0.0-dev-<count>-g<sha>-r<revision>-qt<identity>`; the current
-packaging revision is 3. A release contains exactly two versioned `.tar.zst`
+packaging revision is 4. Staged ELF executables, libraries and plugins, including
+contrib libraries, are stripped with `strip --strip-unneeded` before packaging;
+dynamic runtime symbols are retained. A release contains exactly two versioned `.tar.zst`
 payloads, `SHA256SUMS`, `sizes.json`, `inputs.json`, both build/verification
 reports, `verification-pair.json`, `release.json`, a fresh `current-runtime.json`, the signed
 `provenance.intoto.jsonl`, and relevant crash evidence. GitHub marks development
@@ -68,13 +77,13 @@ rules. Only publication has `contents: write`. UTC waiver validity is checked
 again after uploading/verifying draft bytes, immediately before publication.
 A manual dispatch can disable publication with `publish: false`.
 
-To promote the already successful Phase 2.2 pair without recompilation, upload
-this implementation to main, then dispatch **VLC nightly** with
-`promote_run_id: 41523505909` and `publish: true`. The workflow authenticates the
-source run, selects its immutable artifact ID, verifies its trusted ancestry,
-revalidates both archived candidates, checks current Flathub Qt content without
-deploying the SDK, and signs the exact promoted bytes. A changed Qt identity
-requires a new compatible build instead of promotion.
+For a normal build and release, dispatch **VLC nightly** with `publish: true`
+(and an optional upstream SHA). To promote an existing eligible pair without
+recompilation, set `promote_run_id` to its successful trusted main workflow run.
+The workflow authenticates the source run, selects its immutable artifact ID,
+revalidates both candidates, checks current Flathub Qt content without deploying
+the SDK, and signs the exact promoted bytes. A changed Qt identity requires a
+new compatible build instead of promotion.
 Expired artifacts, mismatched origins or failed native jobs are rejected.
 No tokens need to be pasted into scripts; hosted jobs use scoped GitHub tokens.
 
@@ -95,20 +104,41 @@ build inputs before an immutable completed release is reused.
 
 ## FlatPark
 
-The existing [PR #910](https://github.com/flatpark/flatpark/pull/910) is being
-updated on its original fork branch. The package uses KDE Platform 6.11,
-managed extra-data pins, offline extraction directly into `/app/extra`, and an
-environment-only launcher that forwards arguments. Its read-only resolver
-selects a complete production pair from one release, including eligible
-production prereleases. FlatPark computes download hashes/sizes and updates
-managed pins; incomplete feeds leave the known-good pin untouched.
+VLC 4 Beta is [published on FlatPark](https://flatpark.org/apps/org.videolan.VLCBeta/).
+[PR #910](https://github.com/flatpark/flatpark/pull/910) was merged on
+November 9, 2026. Install from the public remote:
 
-The first pins must be populated from actual published bytes before the PR is
-ready to merge. After FlatPark acceptance/publication, users can install
-`org.videolan.VLCBeta` from FlatPark; it is **not currently advertised as live**.
-Optional `flatpark/publish-action` notifications stay off until the repository
-variable `FLATPARK_ACCEPTED=true` is set after catalog association. Polling works
-independently of notifications.
+```sh
+flatpak remote-add --user --if-not-exists flatpark https://dl.flatpark.org/flatpark.flatpakrepo
+flatpak install --user flatpark org.videolan.VLCBeta
+flatpak run org.videolan.VLCBeta
+```
+
+Or open the official
+[Flatpak installer reference](https://dl.flatpark.org/org.videolan.VLCBeta.flatpakref)
+in your software installer. Updates arrive through:
+
+```sh
+flatpak update --user org.videolan.VLCBeta
+```
+
+The package uses the stable Flatpak branch and KDE Platform 6.11, with managed
+extra-data pins for both architectures. Flatpak downloads the exact versioned
+GitHub Release archive, verifies its SHA-256 and size, and extracts it offline
+directly into `/app/extra`. The launcher forwards command-line arguments.
+
+FlatPark's resolver selects a complete production pair from one release,
+including eligible production prereleases, and its updater refreshes download
+hashes, sizes and metainfo. Incomplete feeds leave the known-good pin untouched.
+The first catalog release is the stripped
+[`4.0.0-dev-39705-g978212a42d-r4-qt83e596ea4f40c119`](https://github.com/rhgKc2yp/vlc-nightly-release/releases/tag/4.0.0-dev-39705-g978212a42d-r4-qt83e596ea4f40c119).
+
+Report packaging and build issues in
+[this repository](https://github.com/rhgKc2yp/vlc-nightly-release/issues) first.
+Optional `flatpark/publish-action` notifications require the repository variable
+`FLATPARK_ACCEPTED=true` after FlatPark confirms repository association; listing
+availability alone does not establish that notifications are enabled. Polling
+works independently of notifications.
 
 ## Tests and known limitations
 
@@ -133,5 +163,7 @@ the upstream crash has not been fixed by this gate change. Installed Flatpak
 integration requirements remain separate and unchanged.
 
 Automated CI is not human playback-quality, physical audio, real GPU or Wayland
-certification. Installed FlatPark testing and actual tested/untested results are
-recorded in the Phase 3 handoff. Historical reports remain in `docs/`.
+certification. See [verification](docs/verification.md) for coverage and diagnostic
+commands, and [architecture](docs/architecture.md) for build inputs and caches.
+Historical implementation reports are available in Git history; build/test logs
+remain in the persistent workspace and published workflow artifacts.
