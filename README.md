@@ -89,7 +89,7 @@ No tokens need to be pasted into scripts; hosted jobs use scoped GitHub tokens.
 
 ## Cadence and maintenance
 
-The workflow wakes every Monday at 04:43 UTC. Starting November 2, 2026 it
+A dedicated runtime watcher checks KDE SDK/Platform 6.11 on both architectures every 12 hours (05:17 and 17:17 UTC), comparing Qt libraries, private headers, QML modules and runtime plugin content against the latest production release without deploying the SDK. Relevant changes enter the existing two-architecture build and verification pipeline using the production VLC source SHA. Unchanged content skips resolution and builds; incompatible SDK/Platform pairs fail closed and are retried at the next check. Watcher identities and rebuild decisions are recorded in CI logs. The weekly source workflow wakes every Monday at 04:43 UTC. Starting November 2, 2026 it
 selects a new VLC snapshot every **two weeks**. Off-weeks reuse the last
 production source SHA while resolving current SDK/Qt identities, allowing an
 urgent Qt compatibility rebuild without waiting for the next source snapshot.

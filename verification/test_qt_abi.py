@@ -37,11 +37,12 @@ class QtAbi(unittest.TestCase):
         self.assertEqual(artifact_version('4.0.0-dev-1-gabc',2,a),artifact_version('4.0.0-dev-1-gabc',2,b))
     def test_qt_binary_or_private_header_change_gets_new_asset_name(self):
         a=self.snapshots()
-        for kind in ('library','header'):
+        for kind in ('library','header','qml','plugins'):
             b=copy.deepcopy(a)
             if kind=='library':
                 for section in ('sdk','platform'):b['x86_64'][section]['libraries']['libQt6Gui.so.6']['object']='changed'
-            else:b['x86_64']['sdk']['private_headers']['Gui']='changed'
+            elif kind=='header':b['x86_64']['sdk']['private_headers']['Gui']='changed'
+            else:b['aarch64']['platform']['runtime_trees']={kind:'changed'}
             validate_snapshot(b['x86_64'])
             self.assertNotEqual(artifact_version('same-vlc',2,a),artifact_version('same-vlc',2,b))
     def test_mismatched_sdk_runtime_blocks_before_compilation(self):
