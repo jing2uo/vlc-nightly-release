@@ -30,6 +30,7 @@ PYOUT
   fi
   exit 0
 fi
+# shellcheck source=scripts/download-retry.sh
 source /recipe/scripts/download-retry.sh
 retry_download flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 for arch in x86_64 aarch64; do
