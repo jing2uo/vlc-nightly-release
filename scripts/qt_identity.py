@@ -97,7 +97,17 @@ def collect(repo,arch,sdk,platform,pull=False):
                 directory=f'/files/include/Qt{name}/{version}/Qt{name}/private'
                 anchor(commit,directory+f'/qt{name.lower()}-config_p.h')
                 private_headers[name]=entry(commit,directory)[4]
-        return dict(qt_version=libraries['libQt6Core.so.6']['version'],libraries=libraries,private_headers=private_headers)
+        # Pull one small anchor per tree to obtain its signed ancestor dirtree
+        # checksums. The checksums cover every descendant without downloading
+        # all QML modules/plugins or deploying an SDK.
+        runtime_trees={}
+        for name,anchor_path in (
+                ('qml','/files/lib/qml/QtQuick/qmldir'),
+                ('plugins','/files/lib/plugins/platforms/libqoffscreen.so')):
+            anchor(commit,anchor_path)
+            runtime_trees[name]=entry(commit,'/files/lib/'+name)[4]
+        return dict(qt_version=libraries['libQt6Core.so.6']['version'],libraries=libraries,
+                    private_headers=private_headers,runtime_trees=runtime_trees)
     result=dict(schema=1,architecture=arch,deployments=dict(sdk_commit=sdk,platform_commit=platform),
                 sdk=component(sdk,True),platform=component(platform,False))
     validate_snapshot(result)

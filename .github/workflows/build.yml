@@ -2,6 +2,7 @@ name: VLC nightly
 on:
   schedule:
     - cron: '43 4 * * 1'
+    - cron: '17 5,17 * * *'
   workflow_dispatch:
     inputs:
       upstream_sha:
@@ -30,8 +31,41 @@ concurrency:
   group: vlc-nightly
   cancel-in-progress: false
 jobs:
+  runtime-watch:
+    if: github.event_name == 'schedule' && github.event.schedule == '17 5,17 * * *'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    outputs:
+      changed: ${{ steps.runtime.outputs.changed }}
+      upstream_sha: ${{ steps.baseline.outputs.upstream_sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Select the latest production source and Qt baseline
+        id: baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pin=$(python3 scripts/production.py runtime-baseline baseline)
+          echo "upstream_sha=$pin" >> "$GITHUB_OUTPUT"
+      - name: Compare both architectures without deploying the SDK
+        id: runtime
+        run: scripts/check-runtime.sh baseline --watch
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: runtime-watch-diagnostics
+          path: |
+            baseline/
+            work/logs/
+          retention-days: 30
   resolve:
-    if: inputs.promote_run_id == ''
+    needs: runtime-watch
+    if: >-
+      always() && !cancelled() && inputs.promote_run_id == '' &&
+      (needs.runtime-watch.result == 'skipped' ||
+       (needs.runtime-watch.result == 'success' && needs.runtime-watch.outputs.changed == 'true'))
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     outputs:
@@ -47,8 +81,13 @@ jobs:
         env:
           PIN: ${{ inputs.upstream_sha }}
           GH_TOKEN: ${{ github.token }}
+          RUNTIME_PIN: ${{ needs.runtime-watch.outputs.upstream_sha }}
         run: |
-          if [[ "${GITHUB_EVENT_NAME:-}" == schedule ]]; then PIN=$(python3 scripts/production.py schedule); fi
+          if [[ -n "${RUNTIME_PIN:-}" ]]; then
+            PIN=$RUNTIME_PIN
+          elif [[ "${GITHUB_EVENT_NAME:-}" == schedule ]]; then
+            PIN=$(python3 scripts/production.py schedule)
+          fi
           scripts/run-container.sh resolve "$PIN"
           version=$(python3 -c 'import json;print((lambda d: d.get("artifact_version",d["version"]))(json.load(open("work/inputs.json"))))')
           sha=$(python3 -c 'import json;print(json.load(open("work/inputs.json"))["upstream_sha"])')
@@ -69,7 +108,7 @@ jobs:
           retention-days: 30
   build:
     needs: resolve
-    if: needs.resolve.outputs.build == 'true'
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.resolve.outputs.build == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -175,6 +214,7 @@ jobs:
           retention-days: 30
   verify:
     needs: [resolve, build]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.build.result == 'success' }}
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:

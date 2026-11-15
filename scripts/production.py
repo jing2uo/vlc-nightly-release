@@ -71,8 +71,7 @@ def prepare(directory,repository,source_run):
     return result
 
 
-def scheduled_pin(releases,repository,today,load):
-    if ((today-date(2026,11,2)).days//7)%2==0:return ''
+def latest_production(releases,repository,load):
     for rel in sorted(releases,key=lambda r:r.get('published_at') or '',reverse=True):
         version=rel.get('tag_name','')
         if rel.get('draft') or not re.fullmatch(r'4\.0\.0-dev-\d+-g[0-9a-f]+-r\d+-qt[0-9a-f]{16}',version):continue
@@ -82,12 +81,29 @@ def scheduled_pin(releases,repository,today,load):
         data=load(expected)
         if (data.get('channel')=='production' and data.get('repository')==repository and data.get('version')==version
                 and data.get('automated_status') in ('PASS','WAIVED') and re.fullmatch('[0-9a-f]{40}',data.get('upstream_sha',''))):
-            return data['upstream_sha']
-    return '' # No production release yet: initialize the service.
+            return data
+    return None
+
+
+def scheduled_pin(releases,repository,today,load):
+    if ((today-date(2026,11,2)).days//7)%2==0:return ''
+    data=latest_production(releases,repository,load)
+    return data['upstream_sha'] if data else '' # Initialize on the weekly schedule.
+
+
+def runtime_baseline(releases,repository,load,directory):
+    data=latest_production(releases,repository,load)
+    if data is None:raise ValueError('No production baseline; initialize with the normal build workflow')
+    if not re.fullmatch('[0-9a-f]{64}',data.get('qt_abi_identity','')):
+        raise ValueError('Production release lacks a Qt content identity')
+    directory=Path(directory);directory.mkdir(parents=True,exist_ok=True)
+    (directory/'inputs.json').write_text(json.dumps(data,indent=2)+'\n')
+    print('Runtime watcher baseline: '+data['version']+'; source: '+data['upstream_sha'],file=sys.stderr)
+    return data['upstream_sha']
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('mode',choices=['promotion','prepare','schedule']);p.add_argument('value',nargs='?')
+    p=argparse.ArgumentParser();p.add_argument('mode',choices=['promotion','prepare','schedule','runtime-baseline']);p.add_argument('value',nargs='?')
     p.add_argument('--repository',default=os.getenv('GITHUB_REPOSITORY'));p.add_argument('--source-run',default=os.getenv('SOURCE_RUN_ID'))
     a=p.parse_args()
     try:
@@ -105,5 +121,6 @@ if __name__=='__main__':
             releases=api(f'repos/{a.repository}/releases?per_page=100')
             def load(url):
                 with urllib.request.urlopen(url,timeout=30) as response:return json.load(response)
-            print(scheduled_pin(releases,a.repository,datetime.now(timezone.utc).date(),load))
+            if a.mode=='runtime-baseline':print(runtime_baseline(releases,a.repository,load,a.value))
+            else:print(scheduled_pin(releases,a.repository,datetime.now(timezone.utc).date(),load))
     except Exception as error:p.exit(1,'Release eligibility failed: '+str(error)+'\n')

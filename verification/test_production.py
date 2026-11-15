@@ -47,6 +47,53 @@ class ProductionTests(unittest.TestCase):
         data['channel']='internal'
         self.assertEqual(p.scheduled_pin([release],self.repo,date(2026,11,9),lambda u:data),'')
 
+    def test_runtime_baseline_retains_latest_production_source_even_in_source_week(self):
+        version='4.0.0-dev-1-gaaaaaaaaaa-r4-qt'+('b'*16)
+        url=f'https://github.com/{self.repo}/releases/download/{version}/release.json'
+        release=dict(tag_name=version,draft=False,published_at='2026-11-02T00:00:00Z',
+                     assets=[dict(name='release.json',browser_download_url=url)])
+        data=dict(channel='production',repository=self.repo,version=version,
+                  automated_status='PASS',upstream_sha='a'*40,qt_abi_identity='b'*64)
+        with tempfile.TemporaryDirectory() as directory:
+            # An internal candidate and a newer draft must not become the baseline.
+            draft=dict(release,draft=True,published_at='2026-11-16T00:00:00Z')
+            self.assertEqual(p.runtime_baseline([draft,release],self.repo,lambda u:data,directory),'a'*40)
+            self.assertEqual(json.loads((Path(directory)/'inputs.json').read_text()),data)
+            data['channel']='internal'
+            with self.assertRaises(ValueError):p.runtime_baseline([release],self.repo,lambda u:data,directory)
+            with self.assertRaises(ValueError):p.runtime_baseline([],self.repo,lambda u:data,directory)
+
+    def test_watcher_decisions_and_publication_gate(self):
+        import subprocess,sys
+        from test_release_cli import ReleaseCLI
+        from qt_identity import identity
+        script=(path.parent/'check-runtime.sh').read_text().split("<<'PY'\n",1)[1].rsplit('\nPY',1)[0]
+        for change in ('unchanged','metadata','qml','plugins','incompatible'):
+            with self.subTest(change=change),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);(root/'logs').mkdir()
+                lock=ReleaseCLI().fixture()
+                snapshots=copy.deepcopy(lock['qt_abi'])
+                if change=='metadata':snapshots['aarch64']['deployments']['sdk_commit']='metadata-only'
+                elif change in ('qml','plugins'):snapshots['aarch64']['platform']['runtime_trees']={change:'changed'}
+                elif change=='incompatible':snapshots['x86_64']['sdk']['libraries']['libQt6Core.so.6']['object']='mismatched'
+                for arch,snapshot in snapshots.items():
+                    snapshot['identity']=identity(snapshot)
+                    (root/'logs'/f'current-{arch}.json').write_text(json.dumps(snapshot))
+                (root/'inputs.json').write_text(json.dumps(lock))
+                code=script.replace('/work/',str(root)+'/').replace('/recipe/scripts',str(path.parent))
+                result=subprocess.run([sys.executable,'-','--watch'],input=code,text=True,capture_output=True)
+                if change=='incompatible':
+                    self.assertNotEqual(result.returncode,0)
+                    self.assertFalse((root/'logs/current-runtime.json').exists())
+                    continue
+                self.assertEqual(result.returncode,0,result.stderr)
+                report=json.loads((root/'logs/current-runtime.json').read_text())
+                self.assertEqual(report['changed'],change in ('qml','plugins'))
+                self.assertIn('Decision:',result.stdout)
+                # The publication invocation still rejects changed identities.
+                result=subprocess.run([sys.executable,'-',''],input=code,text=True,capture_output=True)
+                self.assertEqual(result.returncode==0,change in ('unchanged','metadata'))
+
     def test_runtime_check_refuses_to_replace_unrelated_inputs(self):
         import os,subprocess
         with tempfile.TemporaryDirectory() as directory:

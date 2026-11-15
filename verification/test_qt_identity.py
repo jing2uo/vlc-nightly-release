@@ -27,9 +27,9 @@ class PartialRepository:
             return ''
         if operation=='ls':
             commit,path=argv[-2:]
-            if path.endswith('/private'):
+            if path.endswith('/private') or path in ('/files/lib/qml','/files/lib/plugins'):
                 if not any(c==commit and p.startswith(path+'/') for c,p in self.fetched):
-                    raise AssertionError('private-header directory metadata not fetched')
+                    raise AssertionError('directory metadata not fetched')
                 return f'd00755 0 0 0 {"b"*64} {path}\n'
             if (commit,path) not in self.fetched:
                 raise subprocess.CalledProcessError(1,argv,stderr="Opening content object: Couldn't find file object 'missing-symlink'")
@@ -62,6 +62,9 @@ class QtIdentityLookup(unittest.TestCase):
                         self.assertIn((commit,path),repository.fetched)
                         self.assertEqual(library['sha256'],hashlib.sha256(repository.body).hexdigest())
                         self.assertEqual(library['object'],'c'*64)
+                for section in ('sdk','platform'):
+                    self.assertEqual(result[section]['runtime_trees'],dict(qml='b'*64,plugins='b'*64))
+                self.assertFalse(any('--subpath=/files' in argv for argv in repository.commands))
                 self.assertTrue(all(argv[1]=='--repo=/chosen/repo' for argv in repository.commands if argv[0]=='ostree'))
 
     def test_missing_object_reports_full_ostree_stderr_without_fallback(self):
