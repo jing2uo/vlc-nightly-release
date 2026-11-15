@@ -42,7 +42,7 @@ source/contrib/SDK caches are retained; incompatible binary outputs are rejected
 ## Production releases
 
 Versions are `4.0.0-dev-<count>-g<sha>-r<revision>-qt<identity>`; the current
-packaging revision is 4. Staged ELF executables, libraries and plugins, including
+packaging revision is 5. Staged ELF executables, libraries and plugins, including
 contrib libraries, are stripped with `strip --strip-unneeded` before packaging;
 dynamic runtime symbols are retained. A release contains exactly two versioned `.tar.zst`
 payloads, `SHA256SUMS`, `sizes.json`, `inputs.json`, both build/verification
@@ -141,6 +141,14 @@ availability alone does not establish that notifications are enabled. Polling
 works independently of notifications.
 
 ## Tests and known limitations
+
+`.github/workflows/lint.yml` runs lightweight CI on pull requests and pushes to
+`main`: Python unit tests and syntax checks, ShellCheck 0.11.0, actionlint 1.7.12,
+and JSON syntax/required-field validation for checked-in manifests. It uses
+read-only permissions, no secrets, and checksum-verified lint tools. It does not
+run Podman, download KDE SDKs, or compile VLC. Full native builds and release
+verification remain in `build.yml`; passing lightweight CI does not certify
+runtime compatibility or authorize publication.
 
 Release-blocking checks on both native architectures cover archive integrity,
 SHA-256/provenance/extraction safety, ELF architecture and dependency/symbol

@@ -1,0 +1,38 @@
+name: Lightweight CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install pinned lint tools
+        run: |
+          tools=$(mktemp -d)
+          cd "$tools"
+          curl --fail --silent --show-error --location --retry 3 --proto '=https' --proto-redir '=https' \
+            --output actionlint.tar.gz https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          curl --fail --silent --show-error --location --retry 3 --proto '=https' --proto-redir '=https' \
+            --output shellcheck.tar.xz https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz
+          echo '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint.tar.gz' | sha256sum --check
+          echo '8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  shellcheck.tar.xz' | sha256sum --check
+          tar -xzf actionlint.tar.gz actionlint
+          tar -xJf shellcheck.tar.xz --strip-components=1 shellcheck-v0.11.0/shellcheck
+          echo "$tools" >> "$GITHUB_PATH"
+      - name: Python unit tests
+        run: python3 -m unittest discover -s verification -p 'test_*.py'
+      - name: Python syntax
+        run: python3 -m compileall -q scripts verification
+      - name: ShellCheck
+        run: shellcheck --external-sources scripts/*.sh
+      - name: GitHub Actions workflows
+        run: actionlint
+      - name: JSON manifests and required fields
+        run: python3 verification/validate_manifests.py

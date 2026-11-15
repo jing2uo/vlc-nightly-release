@@ -18,7 +18,7 @@ from source_patches import identity as patch_identity
 from runtime_paths import collect_evidence, evidence_matches, hash_drift
 from qt_identity import artifact_version, release_identity, validate_inputs
 
-PACKAGING_REVISION = 4
+PACKAGING_REVISION = 5
 
 
 def git(*args):

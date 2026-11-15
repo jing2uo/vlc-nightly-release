@@ -2,6 +2,7 @@
 # Sourced by build.sh. Keep dependency build flags/toolchain overrides here;
 # this file's digest is part of the dependency cache compatibility key.
 build_contrib() {
+  local jobs=${1:?job count required}
   local SOURCE_DATE_EPOCH=$DEPS_SOURCE_DATE_EPOCH
   export SOURCE_DATE_EPOCH
   deps=/work/deps/$CACHE_KEY
@@ -24,11 +25,11 @@ build_contrib() {
     echo "Reusing completed contrib cache: $CACHE_KEY"
     return
   fi
-  cd "$deps/extras/tools"
+  cd "$deps/extras/tools" || return
   if [[ ! -f Makefile ]]; then stage tools-bootstrap ./bootstrap; fi
   stage tools make -j"$jobs" all
   mkdir -p "$deps/contrib/linux"
-  cd "$deps/contrib/linux"
+  cd "$deps/contrib/linux" || return
   if [[ ! -f config.mak ]]; then
     stage contrib-bootstrap ../bootstrap --host="$triplet" --enable-sections --enable-libdsm --enable-dvdcss
   fi
