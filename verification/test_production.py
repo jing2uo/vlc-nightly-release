@@ -142,7 +142,7 @@ class ProductionTests(unittest.TestCase):
 
     def test_production_permission_and_attestation_controls(self):
         root=path.parent.parent;text=(root/'.github/workflows/build.yml').read_text()
-        self.assertIn('environment: production',text);self.assertIn('uses: actions/attest@v4',text)
+        self.assertIn('environment: production',text);self.assertRegex(text,r'uses: actions/attest@[0-9a-f]{40}\b')
         self.assertIn('needs: [verify, promote]',text)
         publish=(root/'scripts/publish.sh').read_text()
         self.assertIn('gh attestation verify',publish);self.assertNotIn('--clobber',publish)
