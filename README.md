@@ -42,7 +42,7 @@ source/contrib/SDK caches are retained; incompatible binary outputs are rejected
 ## Production releases
 
 Versions are `4.0.0-dev-<count>-g<sha>-r<revision>-qt<identity>`; the current
-packaging revision is 5. Staged ELF executables, libraries and plugins, including
+packaging revision is 6. Staged ELF executables, libraries and plugins, including
 contrib libraries, are stripped with `strip --strip-unneeded` before packaging;
 dynamic runtime symbols are retained. A release contains exactly two versioned `.tar.zst`
 payloads, `SHA256SUMS`, `sizes.json`, `inputs.json`, both build/verification
