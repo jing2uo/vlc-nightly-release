@@ -103,6 +103,11 @@ patch_key=$(sha256sum /recipe/patches/manifest.json | cut -d' ' -f1)
 build=/work/vlc-build/$CACHE_KEY/$VLC_SHA-$patch_key
 mkdir -p "$build"
 cd "$build"
+# libnfs 8.0.1 exposes its TLS dependencies in Libs.private, while VLC links
+# the contrib library statically. Include the full dependency chain for NFS.
+nfs_pkg_config_libdir="$deps/contrib/$triplet/lib/pkgconfig:$PKG_CONFIG_LIBDIR"
+NFS_LIBS="$(PKG_CONFIG_LIBDIR="$nfs_pkg_config_libdir" pkg-config --static --libs libnfs gnutls)"
+export NFS_LIBS
 # Preserve upstream flags. /app/extra is the future extra-data installation root.
 stage configure /work/source/configure --host="$triplet" --prefix=/app/extra \
   --libdir=/app/extra/lib --libexecdir=/app/extra/lib --with-contrib="$deps/contrib/$triplet" \
