@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 arch=${1:?};shift
-XDG_RUNTIME_DIR=$(mktemp -d /tmp/vlc-runtime.XXXXXX)
+XDG_RUNTIME_DIR=$(mktemp -d "${TMPDIR:-/tmp}/vlc-runtime.XXXXXX")
 export XDG_RUNTIME_DIR
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"

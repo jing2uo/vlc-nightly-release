@@ -10,7 +10,7 @@ on:
         type: string
         required: false
       promote_run_id:
-        description: 'Promote a successful native build run without rebuilding (initial run: 41523505909)'
+        description: 'Promote a successful native build run without rebuilding'
         type: string
         required: false
       publish:

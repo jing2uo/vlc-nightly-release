@@ -56,11 +56,12 @@ class CorePolicy(unittest.TestCase):
                 stub.chmod(0o755)
             script=Path(__file__).with_name('headless.sh')
             for status in (0,19):
-                env=dict(os.environ,PATH=str(directory)+':'+os.environ['PATH'],
+                env=dict(os.environ,PATH=str(directory)+':'+os.environ['PATH'],TMPDIR=str(directory),
                          ARGUMENTS=str(directory/'arguments'),CORE_EXIT=str(status))
                 result=__import__('subprocess').run(['bash',str(script),'x86_64'],
                     env=env,capture_output=True,text=True,timeout=5)
                 self.assertEqual(result.returncode,status,result.stderr)
+                self.assertTrue(any(directory.glob('vlc-runtime.*')))
                 self.assertNotIn('unexpected-optional-setup',result.stderr)
                 self.assertEqual((directory/'arguments').read_text().splitlines(),
                     ['/recipe/verification/run.py','--work','/work','--arch','x86_64'])

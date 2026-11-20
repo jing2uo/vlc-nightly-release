@@ -51,7 +51,7 @@ if a[:2]==['release','download']:
   p=Path(n);shutil.copy2(p,dest/p.name)
  if os.getenv('BAD_DOWNLOAD')=='yes':next(dest.glob('*.tar.zst')).write_bytes(b'tampered')
 ''');gh.chmod(0o755)
-        self.env=dict(os.environ,PATH=str(self.bin)+':'+os.environ['PATH'],VLC_PUBLICATION_APPROVED='production-pair-reviewed',
+        self.env=dict(os.environ,PATH=str(self.bin)+':'+os.environ['PATH'],TMPDIR=str(self.root),VLC_PUBLICATION_APPROVED='production-pair-reviewed',
                       GITHUB_ACTIONS='true',GITHUB_REF='refs/heads/main',GITHUB_REPOSITORY='owner/repository',
                       GITHUB_SHA='b'*40,GITHUB_SERVER_URL='https://github.com',GITHUB_RUN_ID='2',SOURCE_RUN_ID='1',
                       GH_LOG=str(self.root/'gh.log'),GH_ASSET_LIST=str(self.root/'asset-list.json'),COUNTER=str(self.root/'counter'))

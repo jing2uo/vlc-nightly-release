@@ -8,7 +8,7 @@ work=$(cd "$work" && pwd)
 podman build -t localhost/vlc-nightly-builder -f "$root/container/Containerfile" "$root/container"
 # Bubblewrap's proc mount needs an unmasked parent proc. On Fedora SELinux
 # also denies that nested mount; disable labels for this one rootless container.
-# Keep seccomp, namespaces and capability drops. See docs/phase-1-report.md.
+# Keep seccomp, namespaces and capability drops.
 exec podman run --rm --userns=keep-id --cap-drop=ALL \
   --security-opt 'unmask=/proc/*' --security-opt label=disable \
   --volume "$root:/recipe:ro" --volume "$work:/work" \
