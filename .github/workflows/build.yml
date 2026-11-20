@@ -107,6 +107,7 @@ jobs:
           path: work/logs/
           retention-days: 30
   build:
+    name: build-${{ matrix.arch }}
     needs: resolve
     if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.resolve.outputs.build == 'true' }}
     strategy:

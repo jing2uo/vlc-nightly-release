@@ -15,9 +15,19 @@ class ProductionTests(unittest.TestCase):
         self.repo='rhgKc2yp/vlc-nightly-release'
         self.run=dict(repository=dict(full_name=self.repo),head_repository=dict(full_name=self.repo),
                       head_branch='main',event='workflow_dispatch',path='.github/workflows/build.yml',conclusion='success')
-        self.jobs=[dict(name=name,conclusion='success') for name in ['resolve','build (x86_64, ubuntu-26.04)','build (aarch64, ubuntu-26.04-arm)','verify']]
+        self.jobs=[dict(name=name,conclusion='success') for name in ['resolve','build-x86_64','build-aarch64','verify']]
         self.assets=[dict(id=123,name='release-candidate',expired=False)]
     def test_trusted_successful_native_pair(self):self.assertEqual(p.promotion(self.run,self.assets,self.jobs,self.repo)['id'],123)
+    def test_legacy_matrix_job_names_remain_promotable(self):
+        jobs=[dict(name=name,conclusion='success') for name in
+              ['resolve','build (x86_64, ubuntu-26.04)','build (aarch64, ubuntu-26.04-arm)','verify']]
+        self.assertEqual(p.promotion(self.run,self.assets,jobs,self.repo)['id'],123)
+        jobs[2]['name']='build (aarch64, ubuntu-other-runner)'
+        self.assertEqual(p.promotion(self.run,self.assets,jobs,self.repo)['id'],123)
+    def test_both_stable_build_jobs_required(self):
+        for name in ('build-x86_64','build-aarch64'):
+            jobs=[j for j in self.jobs if j['name']!=name]
+            with self.assertRaises(ValueError):p.promotion(self.run,self.assets,jobs,self.repo)
     def test_fork_branch_failed_run_or_wrong_workflow_rejected(self):
         for key,value in [('head_branch','feature'),('event','pull_request'),('conclusion','failure'),('path','other.yml')]:
             run=copy.deepcopy(self.run);run[key]=value

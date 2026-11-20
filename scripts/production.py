@@ -28,9 +28,14 @@ def promotion(run,artifacts,jobs,repository):
         or run['head_branch']!='main' or run['event'] not in ('schedule','workflow_dispatch')
         or run['path']!='.github/workflows/build.yml' or run['conclusion']!='success'):
         raise ValueError('Promotion requires a successful trusted main build workflow')
-    expected={'resolve','build (x86_64, ubuntu-26.04)','build (aarch64, ubuntu-26.04-arm)','verify'}
     passed={j['name'] for j in jobs if j['conclusion']=='success'}
-    if not expected<=passed:raise ValueError('Both native builds and pair verification must have succeeded')
+    if not {'resolve','verify'}<=passed:
+        raise ValueError('Both native builds and pair verification must have succeeded')
+    # Accept legacy matrix job names when promoting an older successful run.
+    for arch in ('x86_64','aarch64'):
+        if (f'build-{arch}' not in passed
+                and not any(re.fullmatch(rf'build \({arch}, [^()]+\)',name) for name in passed)):
+            raise ValueError('Both native builds and pair verification must have succeeded')
     selected=[a for a in artifacts if a['name']=='release-candidate' and not a['expired']]
     if len(selected)!=1:raise ValueError('Missing/ambiguous/expired release-candidate artifact')
     return selected[0]
